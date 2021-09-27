@@ -1,0 +1,39 @@
+{
+  "name": "mit6035",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "compile": "tsc -p tsconfig.json",
+    "test": "skr test src"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LeuisKen/css-linear-gradient-parser.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/LeuisKen/css-linear-gradient-parser/issues"
+  },
+  "homepage": "https://github.com/LeuisKen/css-linear-gradient-parser#readme",
+  "devDependencies": {
+    "@reskript/cli": "^2.2.2",
+    "@reskript/cli-lint": "^2.2.2",
+    "@reskript/cli-test": "^2.2.2",
+    "@reskript/config-lint": "^2.2.2",
+    "@types/jest": "^27.0.2",
+    "core-js": "^3.18.1",
+    "eslint": "^7.32.0",
+    "stylelint": "^13.13.1",
+    "typescript": "^4.4.3",
+    "webpack": "^5.54.0"
+  },
+  "dependencies": {
+    "commander": "^8.2.0"
+  }
+}

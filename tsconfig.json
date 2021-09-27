@@ -1,0 +1,23 @@
+{
+    "include": [
+        "src",
+    ],
+    "compilerOptions": {
+        "module": "CommonJS",
+        "target": "es2018",
+        "outDir": "dist",
+        "jsx": "react-jsx",
+        "esModuleInterop": true,
+        "moduleResolution": "node",
+        "strict": true,
+        "noUnusedLocals": false,
+        "noFallthroughCasesInSwitch": true,
+        "baseUrl": ".",
+        "keyofStringsOnly": true,
+        "skipLibCheck": true,
+        "sourceMap": true,
+        "paths": {
+            "@/*": ["./src/*"]
+        }
+    }
+}
