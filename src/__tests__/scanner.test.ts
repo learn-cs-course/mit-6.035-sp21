@@ -5,7 +5,7 @@ import main from '../main';
 const scannerTestInputDir = path.resolve(__dirname, 'scanner/input');
 const scannerTestOutputDir = path.resolve(__dirname, 'scanner/output');
 // const cases = fs.readdirSync(scannerTestInputDir, 'utf-8');
-const cases = ['char1', 'char2', 'hexlit1'];
+const cases = ['char1', 'char2', 'hexlit1', 'hexlit2'];
 
 describe('scanner basic case', () => {
 
