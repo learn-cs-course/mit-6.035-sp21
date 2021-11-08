@@ -83,6 +83,31 @@ export function createScanner(): Scanner {
         throw new Error('Unterminated_string_literal');
     }
 
+    function scanHexDigits(): string {
+        let valueChars: number[] = [];
+        while (true) {
+            let ch = text.charCodeAt(pos);
+            if (
+                !
+                (
+                    (ch >= CharacterCodes._0 && ch <= CharacterCodes._9)
+                ||
+                    (ch >= CharacterCodes.a && ch <= CharacterCodes.f)
+                ||
+                    (ch >= CharacterCodes.A && ch <= CharacterCodes.F)
+                )
+            ) {
+                break;
+            }
+            valueChars.push(ch);
+            pos++;
+        }
+        if (valueChars.length < 1) {
+            valueChars = [];
+        }
+        return String.fromCharCode(...valueChars);
+    }
+
     function scan(): SyntaxKind {
         startPos = pos;
         tokenValue = '';
@@ -136,6 +161,14 @@ export function createScanner(): Scanner {
                     pos++;
                     token = SyntaxKind.ExclamationToken;
                     return token;
+
+                case CharacterCodes._0:
+                    if (pos + 2 < end && (text.charCodeAt(pos + 1) === CharacterCodes.X || text.charCodeAt(pos + 1) === CharacterCodes.x)) {
+                        pos += 2;
+                        tokenValue = '0x' + scanHexDigits();
+                        token = SyntaxKind.IntLiteral;
+                        return token;
+                    }
 
                 case CharacterCodes.singleQuote:
                     return scanChar();
