@@ -234,6 +234,7 @@ export class Scanner {
             const errorMessage = formatUnexpectedCharError(ch);
             return this.error(errorMessage, this.pos - 1);
         }
+
         if (
             currentCharCode < CharacterCodes.maxAsciiCharacter
             // 空格是最小的可打印字符
