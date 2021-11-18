@@ -49,7 +49,9 @@ export function formatUnexpectedCharError(ch: number) {
  */
 export function formatExpectingButFoundError(ch: number, expecting: string) {
     // 为了把 fromCharCode 10 转换成 \n
-    const errorArg = `'${JSON.stringify(String.fromCharCode(ch)).replace(/"/g, '')}'`;
+    const escapedCharByStringify = JSON.stringify(String.fromCharCode(ch)).replace(/"/g, '');
+    const escapedChar = escapedCharByStringify === '\\\\' ? '\\' : escapedCharByStringify;
+    const errorArg = `'${escapedChar}'`;
     const errorMessage = formatStringFromArgs(
         expectingButFoundMessage.message,
         [`'${expecting}'`, errorArg]
