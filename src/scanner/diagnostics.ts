@@ -48,9 +48,11 @@ export function formatUnexpectedCharError(ch: number) {
  * @returns 错误信息
  */
 export function formatExpectingButFoundError(ch: number, expecting: string) {
-    // 为了把 fromCharCode 10 转换成 \n
+    // 字符转移输出，例如把 fromCharCode 10 转换成 \n
     const escapedCharByStringify = JSON.stringify(String.fromCharCode(ch)).replace(/"/g, '');
+    // \\ 的情况比较特殊，单独处理一下
     const escapedChar = escapedCharByStringify === '\\\\' ? '\\' : escapedCharByStringify;
+
     const errorArg = `'${escapedChar}'`;
     const errorMessage = formatStringFromArgs(
         expectingButFoundMessage.message,
