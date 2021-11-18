@@ -1,7 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import {createScanner, Scanner} from './scanner';
-import {computeLineStarts, computeLineOfPosition} from './scanner/utils';
+// import {createScanner, Scanner, } from './scanner';
+import {Scanner} from './scanner/scanner';
+import {computeLineStarts, computeLineOfPosition, computeLineAndCharacterOfPosition} from './scanner/utils';
 import {SyntaxKind} from './types/grammar';
 
 interface Options {
@@ -28,21 +29,31 @@ function getPrintType(kind: SyntaxKind) {
     return null;
 }
 
-function handleScan(scanner: Scanner) {
+function handleScan(scanner: Scanner, filaname: string) {
     const text = scanner.getText();
     const lineStart = computeLineStarts(text);
     const output = [];
 
+    scanner.setOnError((message, pos) => {
+        const {line, character} = computeLineAndCharacterOfPosition(lineStart, pos);
+        if (character === 0) {
+            const res = `${filaname} line ${line}:${lineStart[line] - lineStart[line - 1]}: ${message}`;
+            output.push(res);
+        }
+        else {
+            const res = `${filaname} line ${line + 1}:${character + 1}: ${message}`;
+            output.push(res);
+        }
+    });
+
     // eslint-disable-next-line no-constant-condition
     while (true) {
-        try {
-            scanner.scan();
-        }
-        catch (e: any) {
-            // console.log(e.message);
-        }
+        scanner.scan();
         if (scanner.getToken() === SyntaxKind.EndOfFileToken) {
             break;
+        }
+        if (scanner.getToken() === SyntaxKind.Unknown) {
+            continue;
         }
         const lineNumber = computeLineOfPosition(lineStart, scanner.getTokenPos());
         const printType = getPrintType(scanner.getToken());
@@ -51,7 +62,7 @@ function handleScan(scanner: Scanner) {
         if (printType) {
             res.push(printType);
         }
-        res.push(scanner.getTokenValue());
+        res.push(scanner.getTokenValue()!);
 
         output.push(res.join(' '));
     }
@@ -59,16 +70,14 @@ function handleScan(scanner: Scanner) {
     return output.join('\n') + '\n';
 }
 
-export default function main(filename: string, options: Options) {
-    const filePath = path.resolve(process.cwd(), filename);
+export default function main(filePath: string, options: Options) {
     const code = fs.readFileSync(filePath, 'utf-8');
+    const filename = path.basename(filePath);
 
-    // const outputFilePath = path.join(process.cwd(), options.output);
-
-    const scanner = createScanner();
+    const scanner = new Scanner();
     scanner.setText(code);
     if (options.target === 'scan') {
-        const output = handleScan(scanner);
+        const output = handleScan(scanner, filename);
         // 假装是 stdout
         return output;
     }

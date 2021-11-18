@@ -1,22 +1,25 @@
 import {binarySearch, identity, compareValues} from '../core/binarySearch';
 import {CharacterCodes} from '../types/grammar';
 
+/**
+ * 是否为换行符，只考虑 \r \n
+ *
+ * @param ch
+ * @returns
+ */
 export function isLineBreak(ch: number): boolean {
-    // ES5 7.3:
-    // The ECMAScript line terminator characters are listed in Table 3.
-    //     Table 3: Line Terminator Characters
-    //     Code Unit Value     Name                    Formal Name
-    //     \u000A              Line Feed               <LF>
-    //     \u000D              Carriage Return         <CR>
-    //     \u2028              Line separator          <LS>
-    //     \u2029              Paragraph separator     <PS>
-    // Only the characters in Table 3 are treated as line terminators. Other new line or line
-    // breaking characters are treated as white space but not as line terminators.
-
     return ch === CharacterCodes.lineFeed
-        || ch === CharacterCodes.carriageReturn
-        || ch === CharacterCodes.lineSeparator
-        || ch === CharacterCodes.paragraphSeparator;
+        || ch === CharacterCodes.carriageReturn;
+}
+
+/**
+ * 是否为控制字符，只考虑 \r \n \t
+ *
+ * @param ch
+ * @returns
+ */
+export function isControlCharacter(ch: number): boolean {
+    return ch === CharacterCodes.tab || isLineBreak(ch);
 }
 
 export function computeLineStarts(text: string): number[] {
@@ -47,6 +50,23 @@ export function computeLineStarts(text: string): number[] {
     }
     result.push(lineStart);
     return result;
+}
+
+export interface LineAndCharacter {
+    /** 0-based. */
+    line: number;
+    /*
+     * 0-based. This value denotes the character position in line and is different from the 'column' because of tab characters.
+     */
+    character: number;
+}
+
+export function computeLineAndCharacterOfPosition(lineStarts: readonly number[], position: number): LineAndCharacter {
+    const lineNumber = computeLineOfPosition(lineStarts, position);
+    return {
+        line: lineNumber,
+        character: position - lineStarts[lineNumber]
+    };
 }
 
 export function computeLineOfPosition(lineStarts: readonly number[], position: number, lowerBound?: number) {

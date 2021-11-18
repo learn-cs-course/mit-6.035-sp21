@@ -1,3 +1,7 @@
+/**
+ * @file decaf scanner
+ */
+
 /* eslint-disable max-depth,max-statements,complexity,@typescript-eslint/init-declarations */
 import {SyntaxKind, CharacterCodes} from '../types/grammar';
 import {codePointAt} from '../core/codePointAt';
@@ -132,24 +136,6 @@ export function createScanner(): Scanner {
                 case CharacterCodes.verticalTab:
                 case CharacterCodes.formFeed:
                 case CharacterCodes.space:
-                case CharacterCodes.nonBreakingSpace:
-                case CharacterCodes.ogham:
-                case CharacterCodes.enQuad:
-                case CharacterCodes.emQuad:
-                case CharacterCodes.enSpace:
-                case CharacterCodes.emSpace:
-                case CharacterCodes.threePerEmSpace:
-                case CharacterCodes.fourPerEmSpace:
-                case CharacterCodes.sixPerEmSpace:
-                case CharacterCodes.figureSpace:
-                case CharacterCodes.punctuationSpace:
-                case CharacterCodes.thinSpace:
-                case CharacterCodes.hairSpace:
-                case CharacterCodes.zeroWidthSpace:
-                case CharacterCodes.narrowNoBreakSpace:
-                case CharacterCodes.mathematicalSpace:
-                case CharacterCodes.ideographicSpace:
-                case CharacterCodes.byteOrderMark:
                     pos++;
                     continue;
 

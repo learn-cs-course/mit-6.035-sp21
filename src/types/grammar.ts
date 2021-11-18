@@ -78,29 +78,7 @@ export const enum CharacterCodes {
 
     lineFeed = 0x0A, // \n
     carriageReturn = 0x0D, // \r
-    lineSeparator = 0x2028,
-    paragraphSeparator = 0x2029,
-    nextLine = 0x0085,
-
-    // Unicode 3.0 space characters
-    space = 0x0020, // " "
-    nonBreakingSpace = 0x00A0, //
-    enQuad = 0x2000,
-    emQuad = 0x2001,
-    enSpace = 0x2002,
-    emSpace = 0x2003,
-    threePerEmSpace = 0x2004,
-    fourPerEmSpace = 0x2005,
-    sixPerEmSpace = 0x2006,
-    figureSpace = 0x2007,
-    punctuationSpace = 0x2008,
-    thinSpace = 0x2009,
-    hairSpace = 0x200A,
-    zeroWidthSpace = 0x200B,
-    narrowNoBreakSpace = 0x202F,
-    ideographicSpace = 0x3000,
-    mathematicalSpace = 0x205F,
-    ogham = 0x1680,
+    space = 0x20, // " "
 
     _ = 0x5F,
     $ = 0x24,
@@ -203,7 +181,6 @@ export const enum CharacterCodes {
 
     backspace = 0x08, // \b
     formFeed = 0x0C, // \f
-    byteOrderMark = 0xFEFF,
     tab = 0x09, // \t
     verticalTab = 0x0B, // \v
 }
