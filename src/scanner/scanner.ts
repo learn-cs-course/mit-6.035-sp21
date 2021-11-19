@@ -158,7 +158,7 @@ export class Scanner {
 
                 // 注释或者除号
                 case CharacterCodes.slash:
-                    // 如果是 // 注释
+                    // 如果是 // 单行注释
                     if (this.text.charCodeAt(this.pos + 1) === CharacterCodes.slash) {
                         this.pos += 2;
 
@@ -171,6 +171,27 @@ export class Scanner {
                         }
                         continue;
                     }
+
+                    // 如果是 /* 多行注释
+                    if (this.text.charCodeAt(this.pos + 1) === CharacterCodes.asterisk) {
+                        this.pos += 2;
+
+                        while (this.pos < this.end) {
+                            const ch = this.text.charCodeAt(this.pos);
+                            if (
+                                ch === CharacterCodes.asterisk
+                                && this.text.charCodeAt(this.pos + 1) === CharacterCodes.slash
+                            ) {
+                                this.pos += 2;
+                                break;
+                            }
+                            this.pos++;
+                        }
+
+                        // 如果一直读到文件末尾，continue 会跳转到开头，然后返回一个 EOF
+                        continue;
+                    }
+
                     // 否则，是除号
                     return this.scanSlashToken();
 
