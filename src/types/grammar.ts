@@ -48,7 +48,6 @@ export const enum SyntaxKind {
     PercentToken,
     PlusPlusToken,
     MinusMinusToken,
-    BarToken,
     ExclamationToken,
     AmpersandAmpersandToken,
     BarBarToken,

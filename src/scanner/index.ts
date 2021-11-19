@@ -19,22 +19,17 @@ export class Scanner {
     /**
      * 当前扫描到的字符位置
      */
-    private pos?: number;
+    private pos: number;
 
     /**
      * 当前扫描文本的长度
      */
-    private end?: number;
-
-    /**
-     * 待扫描的文本
-     */
-    private text?: string;
+    private readonly end: number;
 
     /**
      * 当前读取到的 token 的类型
      */
-    private token?: SyntaxKind;
+    private token: SyntaxKind;
 
     /**
      * 当前读取到的 token 值，对于非标识符、字面量类型的 token，值为 undefined
@@ -42,9 +37,9 @@ export class Scanner {
     private tokenValue: string | undefined;
 
     /**
-     *
+     * token 在输入文本串中所在位置
      */
-    private tokenPos?: number;
+    private tokenPos: number;
 
     /**
      * 词法分析错误回调函数
@@ -55,13 +50,26 @@ export class Scanner {
      */
     private onError?: (message: string, pos: number) => void;
 
+    constructor(
+        /**
+         * 待扫描的文本
+         */
+        private readonly text: string
+    ) {
+        this.pos = 0;
+        this.end = text.length;
+        this.token = SyntaxKind.Unknown;
+        this.tokenValue = undefined;
+        this.tokenPos = 0;
+    }
+
     /**
      * 返回读取到的 token 的类型
      *
      * @returns 当前读取到的 token 的类型
      */
     getToken(): SyntaxKind {
-        return this.token!;
+        return this.token;
     }
 
     /**
@@ -79,22 +87,7 @@ export class Scanner {
      * @returns 当前 token 的位置
      */
     getTokenPos(): number {
-        return this.tokenPos!;
-    }
-
-    /**
-     * 设置 scanner 要扫描的文本串，同时重置 scanner 的状态
-     * 对于新创建的 scanner，需要调用该方法进行初始化
-     *
-     * @param text 待扫描的文本
-     */
-    setText(text: string) {
-        this.text = text;
-        this.pos = 0;
-        this.end = text.length;
-        this.token = SyntaxKind.Unknown;
-        this.tokenValue = undefined;
-        this.tokenPos = 0;
+        return this.tokenPos;
     }
 
     /**
@@ -103,7 +96,7 @@ export class Scanner {
      * @returns 待扫描文本
      */
     getText(): string {
-        return this.text!;
+        return this.text;
     }
 
     /**
@@ -121,11 +114,6 @@ export class Scanner {
      * @returns 当前读取到的 token 的类型
      */
     scan(): SyntaxKind {
-
-        if (this.pos === undefined || this.end === undefined || this.text === undefined) {
-            throw new Error('scanner is not initialized');
-        }
-
         // 重置 token 的值
         this.tokenValue = undefined;
 
@@ -315,14 +303,6 @@ export class Scanner {
      * 读取一个 / 运算符，返回读取到的 token 的类型
      */
     private scanSlashToken(): SyntaxKind {
-        if (
-            this.pos === undefined
-            || this.end === undefined
-            || this.text === undefined
-        ) {
-            throw new Error('scanner is not initialized');
-        }
-
         this.pos++;
         this.token = SyntaxKind.SlashToken;
         this.tokenValue = '/';
@@ -335,14 +315,6 @@ export class Scanner {
      * @returns
      */
     private scanCharLiteral(): SyntaxKind {
-        if (
-            this.pos === undefined
-            || this.end === undefined
-            || this.text === undefined
-        ) {
-            throw new Error('scanner is not initialized');
-        }
-
         const currentCharCode = codePointAt(this.text, this.pos + 1)!;
         // 如果是转义字符
         if (currentCharCode === CharacterCodes.backslash) {
@@ -402,14 +374,6 @@ export class Scanner {
      * 读取一个字符串字面量，返回读取到的 token 的类型
      */
     private scanStringLiteral(): SyntaxKind {
-        if (
-            this.pos === undefined
-            || this.end === undefined
-            || this.text === undefined
-        ) {
-            throw new Error('scanner is not initialized');
-        }
-
         this.pos++;
 
         let result = '';
@@ -459,14 +423,6 @@ export class Scanner {
      * 读取一个转义字符
      */
     private readEscapeCharacter(): string | null {
-        if (
-            this.pos === undefined
-            || this.end === undefined
-            || this.text === undefined
-        ) {
-            throw new Error('scanner is not initialized');
-        }
-
         const ch = this.text.charCodeAt(this.pos + 1);
         if (
             ch === CharacterCodes.t
@@ -486,14 +442,6 @@ export class Scanner {
      * 读取一个十六进制数字字面量，返回读取到的 token 的类型
      */
     private scanHexNumericLiteral(): SyntaxKind {
-        if (
-            this.pos === undefined
-            || this.end === undefined
-            || this.text === undefined
-        ) {
-            throw new Error('scanner is not initialized');
-        }
-
         let result = '';
         while (true) {
             if (this.pos >= this.end) {
@@ -542,14 +490,6 @@ export class Scanner {
      * 读取一个十进制数字字面量，返回读取到的 token 的类型
      */
     private scanNumericLiteral(): SyntaxKind {
-        if (
-            this.pos === undefined
-            || this.end === undefined
-            || this.text === undefined
-        ) {
-            throw new Error('scanner is not initialized');
-        }
-
         let result = '';
         while (true) {
             if (this.pos >= this.end) {
@@ -575,14 +515,6 @@ export class Scanner {
      * 读取一个 ! 或 != 运算符，返回读取到的 token 的类型
      */
     private scanExclamationToken(): SyntaxKind {
-        if (
-            this.pos === undefined
-            || this.end === undefined
-            || this.text === undefined
-        ) {
-            throw new Error('scanner is not initialized');
-        }
-
         if (this.text.charCodeAt(this.pos + 1) === CharacterCodes.equals) {
             this.pos += 2;
             this.token = SyntaxKind.ExclamationEqualsToken;
@@ -599,13 +531,6 @@ export class Scanner {
      * 读取一个 % 运算符，返回读取到的 token 的类型
      */
     private scanPercentToken(): SyntaxKind {
-        if (
-            this.pos === undefined
-            || this.end === undefined
-            || this.text === undefined
-        ) {
-            throw new Error('scanner is not initialized');
-        }
         this.pos++;
         this.token = SyntaxKind.PercentToken;
         this.tokenValue = '%';
@@ -616,14 +541,6 @@ export class Scanner {
      * 读取一个 && 运算符，返回读取到的 token 的类型
      */
     private scanAmpersandToken(): SyntaxKind {
-        if (
-            this.pos === undefined
-            || this.end === undefined
-            || this.text === undefined
-        ) {
-            throw new Error('scanner is not initialized');
-        }
-
         const ch = this.text.charCodeAt(this.pos + 1);
 
         if (ch === CharacterCodes.ampersand) {
@@ -642,14 +559,6 @@ export class Scanner {
      * 读取一个 || 运算符，返回读取到的 token 的类型
      */
     private scanBarToken(): SyntaxKind {
-        if (
-            this.pos === undefined
-            || this.end === undefined
-            || this.text === undefined
-        ) {
-            throw new Error('scanner is not initialized');
-        }
-
         const ch = this.text.charCodeAt(this.pos + 1);
 
         if (ch === CharacterCodes.bar) {
@@ -668,14 +577,6 @@ export class Scanner {
      * 读取一个 ( 运算符，返回读取到的 token 的类型
      */
     private scanOpenParenToken(): SyntaxKind {
-        if (
-            this.pos === undefined
-            || this.end === undefined
-            || this.text === undefined
-        ) {
-            throw new Error('scanner is not initialized');
-        }
-
         this.pos++;
         this.token = SyntaxKind.OpenParenToken;
         this.tokenValue = '(';
@@ -686,14 +587,6 @@ export class Scanner {
      * 读取一个 ) 运算符，返回读取到的 token 的类型
      */
     private scanCloseParenToken(): SyntaxKind {
-        if (
-            this.pos === undefined
-            || this.end === undefined
-            || this.text === undefined
-        ) {
-            throw new Error('scanner is not initialized');
-        }
-
         this.pos++;
         this.token = SyntaxKind.CloseParenToken;
         this.tokenValue = ')';
@@ -704,14 +597,6 @@ export class Scanner {
      * 读取一个 * 运算符，返回读取到的 token 的类型
      */
     private scanAsteriskToken(): SyntaxKind {
-        if (
-            this.pos === undefined
-            || this.end === undefined
-            || this.text === undefined
-        ) {
-            throw new Error('scanner is not initialized');
-        }
-
         this.pos++;
         this.token = SyntaxKind.AsteriskToken;
         this.tokenValue = '*';
@@ -722,14 +607,6 @@ export class Scanner {
      * 读取一个 +，+=，++ 运算符，返回读取到的 token 的类型
      */
     private scanPlusToken(): SyntaxKind {
-        if (
-            this.pos === undefined
-            || this.end === undefined
-            || this.text === undefined
-        ) {
-            throw new Error('scanner is not initialized');
-        }
-
         const ch = this.text.charCodeAt(this.pos + 1);
 
         if (ch === CharacterCodes.plus) {
@@ -756,14 +633,6 @@ export class Scanner {
      * 读取一个 -，--，-= 运算符，返回读取到的 token 的类型
      */
     private scanMinusToken(): SyntaxKind {
-        if (
-            this.pos === undefined
-            || this.end === undefined
-            || this.text === undefined
-        ) {
-            throw new Error('scanner is not initialized');
-        }
-
         const ch = this.text.charCodeAt(this.pos + 1);
 
         if (ch === CharacterCodes.minus) {
@@ -790,14 +659,6 @@ export class Scanner {
      * 读取一个 , 分隔符，返回读取到的 token 的类型
      */
     private scanCommaToken(): SyntaxKind {
-        if (
-            this.pos === undefined
-            || this.end === undefined
-            || this.text === undefined
-        ) {
-            throw new Error('scanner is not initialized');
-        }
-
         this.pos++;
         this.token = SyntaxKind.CommaToken;
         this.tokenValue = ',';
@@ -808,14 +669,6 @@ export class Scanner {
      * 读取一个 >，>= 运算符，返回读取到的 token 的类型
      */
     private scanGreaterThanToken(): SyntaxKind {
-        if (
-            this.pos === undefined
-            || this.end === undefined
-            || this.text === undefined
-        ) {
-            throw new Error('scanner is not initialized');
-        }
-
         const ch = this.text.charCodeAt(this.pos + 1);
 
         if (ch === CharacterCodes.equals) {
@@ -835,14 +688,6 @@ export class Scanner {
      * 读取一个 <，<= 运算符，返回读取到的 token 的类型
      */
     private scanLessThanToken(): SyntaxKind {
-        if (
-            this.pos === undefined
-            || this.end === undefined
-            || this.text === undefined
-        ) {
-            throw new Error('scanner is not initialized');
-        }
-
         const ch = this.text.charCodeAt(this.pos + 1);
 
         if (ch === CharacterCodes.equals) {
@@ -862,14 +707,6 @@ export class Scanner {
      * 读取一个 = 或 == 运算符，返回读取到的 token 的类型
      */
     private scanEqualsToken(): SyntaxKind {
-        if (
-            this.pos === undefined
-            || this.end === undefined
-            || this.text === undefined
-        ) {
-            throw new Error('scanner is not initialized');
-        }
-
         const ch = this.text.charCodeAt(this.pos + 1);
 
         if (ch === CharacterCodes.equals) {
@@ -889,14 +726,6 @@ export class Scanner {
      * 读取一个 { ，返回读取到的 token 的类型
      */
     private scanOpenBraceToken(): SyntaxKind {
-        if (
-            this.pos === undefined
-            || this.end === undefined
-            || this.text === undefined
-        ) {
-            throw new Error('scanner is not initialized');
-        }
-
         this.pos++;
         this.token = SyntaxKind.OpenBraceToken;
         this.tokenValue = '{';
@@ -907,14 +736,6 @@ export class Scanner {
      * 读取一个 } ，返回读取到的 token 的类型
      */
     private scanCloseBraceToken(): SyntaxKind {
-        if (
-            this.pos === undefined
-            || this.end === undefined
-            || this.text === undefined
-        ) {
-            throw new Error('scanner is not initialized');
-        }
-
         this.pos++;
         this.token = SyntaxKind.CloseBraceToken;
         this.tokenValue = '}';
@@ -925,14 +746,6 @@ export class Scanner {
      * 读取一个 [ ，返回读取到的 token 的类型
      */
     private scanOpenBracketToken(): SyntaxKind {
-        if (
-            this.pos === undefined
-            || this.end === undefined
-            || this.text === undefined
-        ) {
-            throw new Error('scanner is not initialized');
-        }
-
         this.pos++;
         this.token = SyntaxKind.OpenBracketToken;
         this.tokenValue = '[';
@@ -943,14 +756,6 @@ export class Scanner {
      * 读取一个 ] ，返回读取到的 token 的类型
      */
     private scanCloseBracketToken(): SyntaxKind {
-        if (
-            this.pos === undefined
-            || this.end === undefined
-            || this.text === undefined
-        ) {
-            throw new Error('scanner is not initialized');
-        }
-
         this.pos++;
         this.token = SyntaxKind.CloseBracketToken;
         this.tokenValue = ']';
@@ -961,14 +766,6 @@ export class Scanner {
      * 读取一个 ; ，返回读取到的 token 的类型
      */
     private scanSemicolonToken(): SyntaxKind {
-        if (
-            this.pos === undefined
-            || this.end === undefined
-            || this.text === undefined
-        ) {
-            throw new Error('scanner is not initialized');
-        }
-
         this.pos++;
         this.token = SyntaxKind.SemicolonToken;
         this.tokenValue = ';';
@@ -981,15 +778,6 @@ export class Scanner {
      * @param startCharacter
      */
     private scanIdentifier(startCharacter: number): SyntaxKind | null {
-        if (
-            this.pos === undefined
-            || this.end === undefined
-            || this.text === undefined
-            || this.tokenPos === undefined
-        ) {
-            throw new Error('scanner is not initialized');
-        }
-
         if (isIdentifierStart(startCharacter)) {
             this.pos++;
             while (this.pos < this.end && isIdentifierPart(this.text.charCodeAt(this.pos))) {
@@ -1009,14 +797,6 @@ export class Scanner {
      * @param identifier
      */
     private getIdentifierKind(identifier: string): SyntaxKind {
-        if (
-            this.pos === undefined
-            || this.end === undefined
-            || this.text === undefined
-        ) {
-            throw new Error('scanner is not initialized');
-        }
-
         if (textToKeyword.has(identifier)) {
             return textToKeyword.get(identifier)!;
         }

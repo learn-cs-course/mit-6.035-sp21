@@ -44,7 +44,6 @@ export const textToToken = new Map(getEntries({
     '%': SyntaxKind.PercentToken,
     '++': SyntaxKind.PlusPlusToken,
     '--': SyntaxKind.MinusMinusToken,
-    '|': SyntaxKind.BarToken,
     '!': SyntaxKind.ExclamationToken,
     '&&': SyntaxKind.AmpersandAmpersandToken,
     '||': SyntaxKind.BarBarToken,

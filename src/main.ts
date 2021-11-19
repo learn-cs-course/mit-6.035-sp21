@@ -12,8 +12,7 @@ export default function main(filePath: string, options: Options) {
     const code = fs.readFileSync(filePath, 'utf-8');
     const filename = path.basename(filePath);
 
-    const scanner = new Scanner();
-    scanner.setText(code);
+    const scanner = new Scanner(code);
     if (options.target === 'scan') {
         const output = handleScan(scanner, filename);
         // 假装是 stdout
