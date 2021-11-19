@@ -5,9 +5,6 @@ import main from '../main';
 const scannerTestInputDir = path.resolve(__dirname, 'scanner/input');
 const scannerTestOutputDir = path.resolve(__dirname, 'scanner/output');
 const cases = fs.readdirSync(scannerTestInputDir, 'utf-8');
-// const cases = [
-//     'id1'
-// ];
 
 describe('scanner basic cases', () => {
 
@@ -28,9 +25,6 @@ describe('scanner basic cases', () => {
 const scannerHiddenTestInputDir = path.resolve(__dirname, 'scanner-hidden/input');
 const scannerHiddenTestOutputDir = path.resolve(__dirname, 'scanner-hidden/output');
 const hiddenCases = fs.readdirSync(scannerHiddenTestInputDir, 'utf-8');
-// const hiddenCases = [
-//     'id1'
-// ];
 
 describe('scanner hidden cases', () => {
 
