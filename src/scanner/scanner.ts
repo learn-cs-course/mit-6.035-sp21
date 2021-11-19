@@ -203,6 +203,25 @@ export class Scanner {
                 case CharacterCodes.doubleQuote:
                     return this.scanStringLiteral();
 
+                case CharacterCodes._0:
+                    const next = this.text.charCodeAt(this.pos + 1);
+                    if (next === CharacterCodes.x) {
+                        this.pos += 2;
+                        return this.scanHexNumericLiteral();
+                    }
+                    return this.scanNumericLiteral();
+
+                case CharacterCodes._1:
+                case CharacterCodes._2:
+                case CharacterCodes._3:
+                case CharacterCodes._4:
+                case CharacterCodes._5:
+                case CharacterCodes._6:
+                case CharacterCodes._7:
+                case CharacterCodes._8:
+                case CharacterCodes._9:
+                    return this.scanNumericLiteral();
+
                 // ! 或 !=
                 case CharacterCodes.exclamation:
                     return this.scanExclamationToken();
@@ -369,7 +388,6 @@ export class Scanner {
     /**
      * 读取一个字符串字面量，返回读取到的 token 的类型
      */
-    // @ts-expect-error
     private scanStringLiteral(): SyntaxKind {
         if (
             this.pos === undefined
@@ -379,9 +397,131 @@ export class Scanner {
             throw new Error('scanner is not initialized');
         }
 
-        const currentCharCode = codePointAt(this.text, this.pos + 1)!;
+        this.pos++;
 
+        let result = '';
+        let start = this.pos;
+        while (true) {
+            // 帮忙返回 EOF，按理说不可能，因为下面还有 isLineBreak 呢
+            if (this.pos >= this.end) {
+                return SyntaxKind.EndOfFileToken;
+            }
+            const ch = this.text.charCodeAt(this.pos);
+            if (ch === CharacterCodes.doubleQuote) {
+                result += this.text.substring(start, this.pos);
+                this.pos++;
+                break;
+            }
+            if (ch === CharacterCodes.backslash) {
+                result += this.text.substring(start, this.pos);
+                const escapeChar = this.readEscapeCharacter();
+                if (escapeChar === null) {
+                    const errorMessage = formatUnexpectedCharError(ch);
+                    return this.error(errorMessage, this.pos - 1);
+                }
+                result += escapeChar;
+                start = this.pos;
+                continue;
+            }
+            if (isLineBreak(ch)) {
+                const errorMessage = formatExpectingButFoundError(ch, '\"');
+                return this.error(errorMessage, this.pos - 1);
+            }
+            this.pos++;
+        }
 
+        this.token = SyntaxKind.StringLiteral;
+        this.tokenValue = result;
+        return this.token;
+    }
+
+    /**
+     * 读取一个十六进制数字字面量，返回读取到的 token 的类型
+     */
+    private scanHexNumericLiteral(): SyntaxKind {
+        if (
+            this.pos === undefined
+            || this.end === undefined
+            || this.text === undefined
+        ) {
+            throw new Error('scanner is not initialized');
+        }
+
+        let result = '';
+        while (true) {
+            if (this.pos >= this.end) {
+                return SyntaxKind.EndOfFileToken;
+            }
+            const ch = this.text.charCodeAt(this.pos);
+            if (
+                ch >= CharacterCodes._0
+                && ch <= CharacterCodes._9
+            ) {
+                result += this.text.charAt(this.pos);
+                this.pos++;
+                continue;
+            }
+            if (
+                ch >= CharacterCodes.A
+                && ch <= CharacterCodes.F
+            ) {
+                result += this.text.charAt(this.pos);
+                this.pos++;
+                continue;
+            }
+            if (
+                ch >= CharacterCodes.a
+                && ch <= CharacterCodes.f
+            ) {
+                result += this.text.charAt(this.pos);
+                this.pos++;
+                continue;
+            }
+            break;
+        }
+
+        if (result.length === 0) {
+            const ch = this.text.charCodeAt(this.pos);
+            const errorMessage = formatUnexpectedCharError(ch);
+            return this.error(errorMessage, this.pos);
+        }
+
+        this.token = SyntaxKind.IntLiteral;
+        this.tokenValue = '0x' + result;
+        return this.token;
+    }
+
+    /**
+     * 读取一个十进制数字字面量，返回读取到的 token 的类型
+     */
+    private scanNumericLiteral(): SyntaxKind {
+        if (
+            this.pos === undefined
+            || this.end === undefined
+            || this.text === undefined
+        ) {
+            throw new Error('scanner is not initialized');
+        }
+
+        let result = '';
+        while (true) {
+            if (this.pos >= this.end) {
+                return SyntaxKind.EndOfFileToken;
+            }
+            const ch = this.text.charCodeAt(this.pos);
+            if (
+                ch >= CharacterCodes._0
+                && ch <= CharacterCodes._9
+            ) {
+                result += this.text.charAt(this.pos);
+                this.pos++;
+                continue;
+            }
+            break;
+        }
+        this.token = SyntaxKind.IntLiteral;
+        this.tokenValue = result;
+        return this.token;
     }
 
     /**
@@ -768,6 +908,33 @@ export class Scanner {
         this.token = SyntaxKind.CloseBracketToken;
         this.tokenValue = ']';
         return this.token;
+    }
+
+    /**
+     * 读取一个转义字符
+     */
+    private readEscapeCharacter(): string | null {
+        if (
+            this.pos === undefined
+            || this.end === undefined
+            || this.text === undefined
+        ) {
+            throw new Error('scanner is not initialized');
+        }
+
+        const ch = this.text.charCodeAt(this.pos + 1);
+        if (
+            ch === CharacterCodes.t
+            || ch === CharacterCodes.n
+            || ch === CharacterCodes.singleQuote
+            || ch === CharacterCodes.doubleQuote
+            || ch === CharacterCodes.backslash
+        ) {
+            this.pos++;
+            return '\\' + String.fromCharCode(ch);
+        }
+
+        return null;
     }
 
     /**
