@@ -425,6 +425,12 @@ export class Scanner {
             }
             if (isLineBreak(ch)) {
                 const errorMessage = formatExpectingButFoundError(ch, '\"');
+                this.pos++;
+                return this.error(errorMessage, this.pos - 1);
+            }
+            if (ch === CharacterCodes.singleQuote) {
+                const errorMessage = formatExpectingButFoundError(ch, '\"');
+                this.pos++;
                 return this.error(errorMessage, this.pos - 1);
             }
             this.pos++;

@@ -33,7 +33,7 @@ const scannerHiddenTestInputDir = path.resolve(__dirname, 'scanner-hidden/input'
 const scannerHiddenTestOutputDir = path.resolve(__dirname, 'scanner-hidden/output');
 // const hiddenCases = fs.readdirSync(scannerHiddenTestInputDir, 'utf-8');
 const hiddenCases = [
-    'char10', 'char12', 'char13', 'char14', 'char15',
+    'char10', 'char11', 'char12', 'char13', 'char14', 'char15',
     // 'hexlit4',
     'number4', // 'number5',
     'op4', 'op5', 'op8',
