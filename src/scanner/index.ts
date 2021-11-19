@@ -6,7 +6,7 @@ import {SyntaxKind, CharacterCodes} from '../types/grammar';
 import {codePointAt} from '../core/codePointAt';
 import {formatUnexpectedCharError, formatExpectingButFoundError} from './diagnostics';
 import {textToKeyword} from './tokens';
-import {isLineBreak, isIdentifierStart, isIdentifierPart, isWhiteSpaceSingleLine} from './utils';
+import {isLineBreak, isIdentifierStart, isIdentifierPart} from './utils';
 
 /**
  * Scanner for the decaf language.
@@ -301,10 +301,6 @@ export class Scanner {
                     const identifierKind = this.scanIdentifier(ch);
                     if (identifierKind) {
                         return identifierKind;
-                    }
-                    else if (isWhiteSpaceSingleLine(ch)) {
-                        this.pos++;
-                        continue;
                     }
                     const errorMessage = formatUnexpectedCharError(ch);
                     this.pos++;
