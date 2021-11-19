@@ -13,13 +13,50 @@ export function isLineBreak(ch: number): boolean {
 }
 
 /**
- * 是否为控制字符，只考虑 \r \n \t
+ * 是否为控制字符，只考虑 \r \n \t \f
  *
  * @param ch
  * @returns
  */
 export function isControlCharacter(ch: number): boolean {
-    return ch === CharacterCodes.tab || isLineBreak(ch);
+    return ch === CharacterCodes.tab
+        || ch === CharacterCodes.formFeed
+        || isLineBreak(ch);
+}
+
+/**
+ * 标识符首字符识别
+ *
+ * @param ch
+ * @returns
+ */
+export function isIdentifierStart(ch: number): boolean {
+    return ch >= CharacterCodes.A && ch <= CharacterCodes.Z
+        || ch >= CharacterCodes.a && ch <= CharacterCodes.z
+        || ch === CharacterCodes._;
+}
+
+/**
+ * 标识符非首字符识别
+ *
+ * @param ch
+ * @returns
+ */
+export function isIdentifierPart(ch: number): boolean {
+    return isIdentifierStart(ch)
+        || ch >= CharacterCodes._0 && ch <= CharacterCodes._9;
+}
+
+/**
+ * 是否为空白字符
+ *
+ * @param ch
+ * @returns
+ */
+export function isWhiteSpaceSingleLine(ch: number): boolean {
+    return ch === CharacterCodes.space ||
+        ch === CharacterCodes.tab ||
+        ch === CharacterCodes.verticalTab;
 }
 
 export function computeLineStarts(text: string): number[] {

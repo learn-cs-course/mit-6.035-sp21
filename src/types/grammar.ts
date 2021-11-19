@@ -55,6 +55,8 @@ export const enum SyntaxKind {
     EqualsToken,
     PlusEqualsToken,
     MinusEqualsToken,
+    QuestionToken,
+    ColonToken,
 }
 
 export type KeywordSyntaxKind = SyntaxKind.BoolKeyword

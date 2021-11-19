@@ -5,7 +5,8 @@
 import {SyntaxKind, CharacterCodes} from '../types/grammar';
 import {codePointAt} from '../core/codePointAt';
 import {formatUnexpectedCharError, formatExpectingButFoundError} from './diagnostics';
-import {isLineBreak} from './utils';
+import {textToKeyword} from './tokens';
+import {isLineBreak, isIdentifierStart, isIdentifierPart, isWhiteSpaceSingleLine} from './utils';
 
 /**
  * Scanner for the decaf language.
@@ -139,7 +140,7 @@ export class Scanner {
             }
 
             // 读取 charCode
-            const ch = codePointAt(this.text, this.pos);
+            const ch = codePointAt(this.text, this.pos)!;
 
             switch (ch) {
                 // 换行
@@ -151,7 +152,6 @@ export class Scanner {
                 // 空格
                 case CharacterCodes.tab:
                 case CharacterCodes.verticalTab:
-                case CharacterCodes.formFeed:
                 case CharacterCodes.space:
                     this.pos++;
                     continue;
@@ -290,9 +290,22 @@ export class Scanner {
                 case CharacterCodes.closeBracket:
                     return this.scanCloseBracketToken();
 
-                default:
-                    this.pos++;
+                // ;
+                case CharacterCodes.semicolon:
+                    return this.scanSemicolonToken();
 
+                default:
+                    const identifierKind = this.scanIdentifier(ch);
+                    if (identifierKind) {
+                        return identifierKind;
+                    }
+                    else if (isWhiteSpaceSingleLine(ch)) {
+                        this.pos++;
+                        continue;
+                    }
+                    const errorMessage = formatUnexpectedCharError(ch);
+                    this.pos++;
+                    return this.error(errorMessage, this.pos - 1);
             }
 
         }
@@ -416,7 +429,8 @@ export class Scanner {
                 result += this.text.substring(start, this.pos);
                 const escapeChar = this.readEscapeCharacter();
                 if (escapeChar === null) {
-                    const errorMessage = formatUnexpectedCharError(ch);
+                    const errorMessage = formatUnexpectedCharError(this.text.charCodeAt(this.pos + 1));
+                    this.pos += 2;
                     return this.error(errorMessage, this.pos - 1);
                 }
                 result += escapeChar;
@@ -437,8 +451,35 @@ export class Scanner {
         }
 
         this.token = SyntaxKind.StringLiteral;
-        this.tokenValue = result;
+        this.tokenValue = '\"' + result + '\"';
         return this.token;
+    }
+
+    /**
+     * 读取一个转义字符
+     */
+    private readEscapeCharacter(): string | null {
+        if (
+            this.pos === undefined
+            || this.end === undefined
+            || this.text === undefined
+        ) {
+            throw new Error('scanner is not initialized');
+        }
+
+        const ch = this.text.charCodeAt(this.pos + 1);
+        if (
+            ch === CharacterCodes.t
+            || ch === CharacterCodes.n
+            || ch === CharacterCodes.singleQuote
+            || ch === CharacterCodes.doubleQuote
+            || ch === CharacterCodes.backslash
+        ) {
+            this.pos += 2;
+            return '\\' + String.fromCharCode(ch);
+        }
+
+        return null;
     }
 
     /**
@@ -917,9 +958,9 @@ export class Scanner {
     }
 
     /**
-     * 读取一个转义字符
+     * 读取一个 ; ，返回读取到的 token 的类型
      */
-    private readEscapeCharacter(): string | null {
+    private scanSemicolonToken(): SyntaxKind {
         if (
             this.pos === undefined
             || this.end === undefined
@@ -928,19 +969,95 @@ export class Scanner {
             throw new Error('scanner is not initialized');
         }
 
-        const ch = this.text.charCodeAt(this.pos + 1);
+        this.pos++;
+        this.token = SyntaxKind.SemicolonToken;
+        this.tokenValue = ';';
+        return this.token;
+    }
+
+    /**
+     * 读取一个 ?，返回读取到的 token 的类型
+     */
+    private scanQuestionToken(): SyntaxKind {
         if (
-            ch === CharacterCodes.t
-            || ch === CharacterCodes.n
-            || ch === CharacterCodes.singleQuote
-            || ch === CharacterCodes.doubleQuote
-            || ch === CharacterCodes.backslash
+            this.pos === undefined
+            || this.end === undefined
+            || this.text === undefined
         ) {
+            throw new Error('scanner is not initialized');
+        }
+
+        this.pos++;
+        this.token = SyntaxKind.QuestionToken;
+        this.tokenValue = '?';
+        return this.token;
+    }
+
+    /**
+     * 读取一个 :，返回读取到的 token 的类型
+     */
+    private scanColonToken(): SyntaxKind {
+        if (
+            this.pos === undefined
+            || this.end === undefined
+            || this.text === undefined
+        ) {
+            throw new Error('scanner is not initialized');
+        }
+
+        this.pos++;
+        this.token = SyntaxKind.ColonToken;
+        this.tokenValue = ':';
+        return this.token;
+    }
+
+    /**
+     * 读取一个标识符，返回读取到的 token 的类型，无法识别时返回 null
+     *
+     * @param startCharacter
+     */
+    private scanIdentifier(startCharacter: number): SyntaxKind | null {
+        if (
+            this.pos === undefined
+            || this.end === undefined
+            || this.text === undefined
+            || this.tokenPos === undefined
+        ) {
+            throw new Error('scanner is not initialized');
+        }
+
+        if (isIdentifierStart(startCharacter)) {
             this.pos++;
-            return '\\' + String.fromCharCode(ch);
+            while (this.pos < this.end && isIdentifierPart(this.text.charCodeAt(this.pos))) {
+                this.pos++;
+            }
+            this.tokenValue = this.text.substring(this.tokenPos, this.pos);
+            this.token = this.getIdentifierKind(this.tokenValue);
+            return this.token;
         }
 
         return null;
+    }
+
+    /**
+     * 判断给定标识符是否是关键字，返回正确的 token 类型
+     *
+     * @param identifier
+     */
+    private getIdentifierKind(identifier: string): SyntaxKind {
+        if (
+            this.pos === undefined
+            || this.end === undefined
+            || this.text === undefined
+        ) {
+            throw new Error('scanner is not initialized');
+        }
+
+        if (textToKeyword.has(identifier)) {
+            return textToKeyword.get(identifier)!;
+        }
+
+        return SyntaxKind.Identifier;
     }
 
     /**
