@@ -976,42 +976,6 @@ export class Scanner {
     }
 
     /**
-     * 读取一个 ?，返回读取到的 token 的类型
-     */
-    private scanQuestionToken(): SyntaxKind {
-        if (
-            this.pos === undefined
-            || this.end === undefined
-            || this.text === undefined
-        ) {
-            throw new Error('scanner is not initialized');
-        }
-
-        this.pos++;
-        this.token = SyntaxKind.QuestionToken;
-        this.tokenValue = '?';
-        return this.token;
-    }
-
-    /**
-     * 读取一个 :，返回读取到的 token 的类型
-     */
-    private scanColonToken(): SyntaxKind {
-        if (
-            this.pos === undefined
-            || this.end === undefined
-            || this.text === undefined
-        ) {
-            throw new Error('scanner is not initialized');
-        }
-
-        this.pos++;
-        this.token = SyntaxKind.ColonToken;
-        this.tokenValue = ':';
-        return this.token;
-    }
-
-    /**
      * 读取一个标识符，返回读取到的 token 的类型，无法识别时返回 null
      *
      * @param startCharacter
