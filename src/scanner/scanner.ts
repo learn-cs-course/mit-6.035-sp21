@@ -171,14 +171,84 @@ export class Scanner {
                         }
                         continue;
                     }
-
                     // 否则，是除号
-                    this.pos++;
-                    this.token = SyntaxKind.SlashToken;
-                    return this.token;
+                    return this.scanSlashToken();
 
+                // 单引号
                 case CharacterCodes.singleQuote:
                     return this.scanCharLiteral();
+
+                // 双引号
+                case CharacterCodes.doubleQuote:
+                    return this.scanStringLiteral();
+
+                // ! 或 !=
+                case CharacterCodes.exclamation:
+                    return this.scanExclamationToken();
+
+                // %
+                case CharacterCodes.percent:
+                    return this.scanPercentToken();
+
+                // &&
+                case CharacterCodes.ampersand:
+                    return this.scanAmpersandToken();
+
+                // ||
+                case CharacterCodes.bar:
+                    return this.scanBarToken();
+
+                // (
+                case CharacterCodes.openParen:
+                    return this.scanOpenParenToken();
+
+                // )
+                case CharacterCodes.closeParen:
+                    return this.scanCloseParenToken();
+
+                // *
+                case CharacterCodes.asterisk:
+                    return this.scanAsteriskToken();
+
+                // + 或 ++ 或 +=
+                case CharacterCodes.plus:
+                    return this.scanPlusToken();
+
+                // - 或 -- 或 -=
+                case CharacterCodes.minus:
+                    return this.scanMinusToken();
+
+                // ,
+                case CharacterCodes.comma:
+                    return this.scanCommaToken();
+
+                // > 或 >=
+                case CharacterCodes.greaterThan:
+                    return this.scanGreaterThanToken();
+
+                // < 或 <=
+                case CharacterCodes.lessThan:
+                    return this.scanLessThanToken();
+
+                // = 或 ==
+                case CharacterCodes.equals:
+                    return this.scanEqualsToken();
+
+                // {
+                case CharacterCodes.openBrace:
+                    return this.scanOpenBraceToken();
+
+                // }
+                case CharacterCodes.closeBrace:
+                    return this.scanCloseBraceToken();
+
+                // [
+                case CharacterCodes.openBracket:
+                    return this.scanOpenBracketToken();
+
+                // ]
+                case CharacterCodes.closeBracket:
+                    return this.scanCloseBracketToken();
 
                 default:
                     this.pos++;
@@ -189,12 +259,29 @@ export class Scanner {
     }
 
     /**
+     * 读取一个 / 运算符，返回读取到的 token 的类型
+     */
+    private scanSlashToken(): SyntaxKind {
+        if (
+            this.pos === undefined
+            || this.end === undefined
+            || this.text === undefined
+        ) {
+            throw new Error('scanner is not initialized');
+        }
+
+        this.pos++;
+        this.token = SyntaxKind.SlashToken;
+        this.tokenValue = '/';
+        return this.token;
+    }
+
+    /**
      * 读取一个字符字面量，返回读取到的 token 的类型
      *
      * @returns
      */
     private scanCharLiteral(): SyntaxKind {
-
         if (
             this.pos === undefined
             || this.end === undefined
@@ -256,6 +343,410 @@ export class Scanner {
         this.pos += 2;
         const errorMessage = formatUnexpectedCharError(currentCharCode);
         return this.error(errorMessage, this.pos - 1);
+    }
+
+    /**
+     * 读取一个字符串字面量，返回读取到的 token 的类型
+     */
+    // @ts-expect-error
+    private scanStringLiteral(): SyntaxKind {
+        if (
+            this.pos === undefined
+            || this.end === undefined
+            || this.text === undefined
+        ) {
+            throw new Error('scanner is not initialized');
+        }
+
+        const currentCharCode = codePointAt(this.text, this.pos + 1)!;
+
+
+    }
+
+    /**
+     * 读取一个 ! 或 != 运算符，返回读取到的 token 的类型
+     */
+    private scanExclamationToken(): SyntaxKind {
+        if (
+            this.pos === undefined
+            || this.end === undefined
+            || this.text === undefined
+        ) {
+            throw new Error('scanner is not initialized');
+        }
+
+        if (this.text.charCodeAt(this.pos + 1) === CharacterCodes.equals) {
+            this.pos += 2;
+            this.token = SyntaxKind.ExclamationEqualsToken;
+            this.tokenValue = '!=';
+            return this.token;
+        }
+        this.pos++;
+        this.token = SyntaxKind.ExclamationToken;
+        this.tokenValue = '!';
+        return this.token;
+    }
+
+    /**
+     * 读取一个 % 运算符，返回读取到的 token 的类型
+     */
+    private scanPercentToken(): SyntaxKind {
+        if (
+            this.pos === undefined
+            || this.end === undefined
+            || this.text === undefined
+        ) {
+            throw new Error('scanner is not initialized');
+        }
+        this.pos++;
+        this.token = SyntaxKind.PercentToken;
+        this.tokenValue = '%';
+        return this.token;
+    }
+
+    /**
+     * 读取一个 && 运算符，返回读取到的 token 的类型
+     */
+    private scanAmpersandToken(): SyntaxKind {
+        if (
+            this.pos === undefined
+            || this.end === undefined
+            || this.text === undefined
+        ) {
+            throw new Error('scanner is not initialized');
+        }
+
+        const ch = this.text.charCodeAt(this.pos + 1);
+
+        if (ch === CharacterCodes.ampersand) {
+            this.pos += 2;
+            this.token = SyntaxKind.AmpersandAmpersandToken;
+            this.tokenValue = '&&';
+            return this.token;
+        }
+
+        this.pos++;
+        const errorMessage = formatExpectingButFoundError(ch, '&');
+        return this.error(errorMessage, this.pos);
+    }
+
+    /**
+     * 读取一个 || 运算符，返回读取到的 token 的类型
+     */
+    private scanBarToken(): SyntaxKind {
+        if (
+            this.pos === undefined
+            || this.end === undefined
+            || this.text === undefined
+        ) {
+            throw new Error('scanner is not initialized');
+        }
+
+        const ch = this.text.charCodeAt(this.pos + 1);
+
+        if (ch === CharacterCodes.bar) {
+            this.pos += 2;
+            this.token = SyntaxKind.BarBarToken;
+            this.tokenValue = '||';
+            return this.token;
+        }
+
+        this.pos++;
+        const errorMessage = formatExpectingButFoundError(ch, '|');
+        return this.error(errorMessage, this.pos);
+    }
+
+    /**
+     * 读取一个 ( 运算符，返回读取到的 token 的类型
+     */
+    private scanOpenParenToken(): SyntaxKind {
+        if (
+            this.pos === undefined
+            || this.end === undefined
+            || this.text === undefined
+        ) {
+            throw new Error('scanner is not initialized');
+        }
+
+        this.pos++;
+        this.token = SyntaxKind.OpenParenToken;
+        this.tokenValue = '(';
+        return this.token;
+    }
+
+    /**
+     * 读取一个 ) 运算符，返回读取到的 token 的类型
+     */
+    private scanCloseParenToken(): SyntaxKind {
+        if (
+            this.pos === undefined
+            || this.end === undefined
+            || this.text === undefined
+        ) {
+            throw new Error('scanner is not initialized');
+        }
+
+        this.pos++;
+        this.token = SyntaxKind.CloseParenToken;
+        this.tokenValue = ')';
+        return this.token;
+    }
+
+    /**
+     * 读取一个 * 运算符，返回读取到的 token 的类型
+     */
+    private scanAsteriskToken(): SyntaxKind {
+        if (
+            this.pos === undefined
+            || this.end === undefined
+            || this.text === undefined
+        ) {
+            throw new Error('scanner is not initialized');
+        }
+
+        this.pos++;
+        this.token = SyntaxKind.AsteriskToken;
+        this.tokenValue = '*';
+        return this.token;
+    }
+
+    /**
+     * 读取一个 +，+=，++ 运算符，返回读取到的 token 的类型
+     */
+    private scanPlusToken(): SyntaxKind {
+        if (
+            this.pos === undefined
+            || this.end === undefined
+            || this.text === undefined
+        ) {
+            throw new Error('scanner is not initialized');
+        }
+
+        const ch = this.text.charCodeAt(this.pos + 1);
+
+        if (ch === CharacterCodes.plus) {
+            this.pos += 2;
+            this.token = SyntaxKind.PlusPlusToken;
+            this.tokenValue = '++';
+            return this.token;
+        }
+
+        if (ch === CharacterCodes.equals) {
+            this.pos += 2;
+            this.token = SyntaxKind.PlusEqualsToken;
+            this.tokenValue = '+=';
+            return this.token;
+        }
+
+        this.pos++;
+        this.token = SyntaxKind.PlusToken;
+        this.tokenValue = '+';
+        return this.token;
+    }
+
+    /**
+     * 读取一个 -，--，-= 运算符，返回读取到的 token 的类型
+     */
+    private scanMinusToken(): SyntaxKind {
+        if (
+            this.pos === undefined
+            || this.end === undefined
+            || this.text === undefined
+        ) {
+            throw new Error('scanner is not initialized');
+        }
+
+        const ch = this.text.charCodeAt(this.pos + 1);
+
+        if (ch === CharacterCodes.minus) {
+            this.pos += 2;
+            this.token = SyntaxKind.MinusMinusToken;
+            this.tokenValue = '--';
+            return this.token;
+        }
+
+        if (ch === CharacterCodes.equals) {
+            this.pos += 2;
+            this.token = SyntaxKind.MinusEqualsToken;
+            this.tokenValue = '-=';
+            return this.token;
+        }
+
+        this.pos++;
+        this.token = SyntaxKind.MinusToken;
+        this.tokenValue = '-';
+        return this.token;
+    }
+
+    /**
+     * 读取一个 , 分隔符，返回读取到的 token 的类型
+     */
+    private scanCommaToken(): SyntaxKind {
+        if (
+            this.pos === undefined
+            || this.end === undefined
+            || this.text === undefined
+        ) {
+            throw new Error('scanner is not initialized');
+        }
+
+        this.pos++;
+        this.token = SyntaxKind.CommaToken;
+        this.tokenValue = ',';
+        return this.token;
+    }
+
+    /**
+     * 读取一个 >，>= 运算符，返回读取到的 token 的类型
+     */
+    private scanGreaterThanToken(): SyntaxKind {
+        if (
+            this.pos === undefined
+            || this.end === undefined
+            || this.text === undefined
+        ) {
+            throw new Error('scanner is not initialized');
+        }
+
+        const ch = this.text.charCodeAt(this.pos + 1);
+
+        if (ch === CharacterCodes.equals) {
+            this.pos += 2;
+            this.token = SyntaxKind.GreaterThanEqualsToken;
+            this.tokenValue = '>=';
+            return this.token;
+        }
+
+        this.pos++;
+        this.token = SyntaxKind.GreaterThanToken;
+        this.tokenValue = '>';
+        return this.token;
+    }
+
+    /**
+     * 读取一个 <，<= 运算符，返回读取到的 token 的类型
+     */
+    private scanLessThanToken(): SyntaxKind {
+        if (
+            this.pos === undefined
+            || this.end === undefined
+            || this.text === undefined
+        ) {
+            throw new Error('scanner is not initialized');
+        }
+
+        const ch = this.text.charCodeAt(this.pos + 1);
+
+        if (ch === CharacterCodes.equals) {
+            this.pos += 2;
+            this.token = SyntaxKind.LessThanEqualsToken;
+            this.tokenValue = '<=';
+            return this.token;
+        }
+
+        this.pos++;
+        this.token = SyntaxKind.LessThanToken;
+        this.tokenValue = '<';
+        return this.token;
+    }
+
+    /**
+     * 读取一个 = 或 == 运算符，返回读取到的 token 的类型
+     */
+    private scanEqualsToken(): SyntaxKind {
+        if (
+            this.pos === undefined
+            || this.end === undefined
+            || this.text === undefined
+        ) {
+            throw new Error('scanner is not initialized');
+        }
+
+        const ch = this.text.charCodeAt(this.pos + 1);
+
+        if (ch === CharacterCodes.equals) {
+            this.pos += 2;
+            this.token = SyntaxKind.EqualsEqualsToken;
+            this.tokenValue = '==';
+            return this.token;
+        }
+
+        this.pos++;
+        this.token = SyntaxKind.EqualsToken;
+        this.tokenValue = '=';
+        return this.token;
+    }
+
+    /**
+     * 读取一个 { ，返回读取到的 token 的类型
+     */
+    private scanOpenBraceToken(): SyntaxKind {
+        if (
+            this.pos === undefined
+            || this.end === undefined
+            || this.text === undefined
+        ) {
+            throw new Error('scanner is not initialized');
+        }
+
+        this.pos++;
+        this.token = SyntaxKind.OpenBraceToken;
+        this.tokenValue = '{';
+        return this.token;
+    }
+
+    /**
+     * 读取一个 } ，返回读取到的 token 的类型
+     */
+    private scanCloseBraceToken(): SyntaxKind {
+        if (
+            this.pos === undefined
+            || this.end === undefined
+            || this.text === undefined
+        ) {
+            throw new Error('scanner is not initialized');
+        }
+
+        this.pos++;
+        this.token = SyntaxKind.CloseBraceToken;
+        this.tokenValue = '}';
+        return this.token;
+    }
+
+    /**
+     * 读取一个 [ ，返回读取到的 token 的类型
+     */
+    private scanOpenBracketToken(): SyntaxKind {
+        if (
+            this.pos === undefined
+            || this.end === undefined
+            || this.text === undefined
+        ) {
+            throw new Error('scanner is not initialized');
+        }
+
+        this.pos++;
+        this.token = SyntaxKind.OpenBracketToken;
+        this.tokenValue = '[';
+        return this.token;
+    }
+
+    /**
+     * 读取一个 ] ，返回读取到的 token 的类型
+     */
+    private scanCloseBracketToken(): SyntaxKind {
+        if (
+            this.pos === undefined
+            || this.end === undefined
+            || this.text === undefined
+        ) {
+            throw new Error('scanner is not initialized');
+        }
+
+        this.pos++;
+        this.token = SyntaxKind.CloseBracketToken;
+        this.tokenValue = ']';
+        return this.token;
     }
 
     /**
