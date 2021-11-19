@@ -54,9 +54,9 @@ export function isIdentifierPart(ch: number): boolean {
  * @returns
  */
 export function isWhiteSpaceSingleLine(ch: number): boolean {
-    return ch === CharacterCodes.space ||
-        ch === CharacterCodes.tab ||
-        ch === CharacterCodes.verticalTab;
+    return ch === CharacterCodes.space
+        || ch === CharacterCodes.tab
+        || ch === CharacterCodes.verticalTab;
 }
 
 export function computeLineStarts(text: string): number[] {
@@ -93,17 +93,10 @@ export interface LineAndCharacter {
     /** 0-based. */
     line: number;
     /*
-     * 0-based. This value denotes the character position in line and is different from the 'column' because of tab characters.
+     * 0-based.
+     * This value denotes the character position in line and is different from the 'column' because of tab characters.
      */
     character: number;
-}
-
-export function computeLineAndCharacterOfPosition(lineStarts: readonly number[], position: number): LineAndCharacter {
-    const lineNumber = computeLineOfPosition(lineStarts, position);
-    return {
-        line: lineNumber,
-        character: position - lineStarts[lineNumber]
-    };
 }
 
 export function computeLineOfPosition(lineStarts: readonly number[], position: number, lowerBound?: number) {
@@ -122,4 +115,13 @@ export function computeLineOfPosition(lineStarts: readonly number[], position: n
         }
     }
     return lineNumber;
+}
+
+
+export function computeLineAndCharacterOfPosition(lineStarts: readonly number[], position: number): LineAndCharacter {
+    const lineNumber = computeLineOfPosition(lineStarts, position);
+    return {
+        line: lineNumber,
+        character: position - lineStarts[lineNumber],
+    };
 }

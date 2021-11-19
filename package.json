@@ -8,19 +8,20 @@
   },
   "scripts": {
     "compile": "tsc -p tsconfig.json",
-    "test": "skr test src"
+    "test": "skr test src",
+    "lint": "skr lint"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/LeuisKen/css-linear-gradient-parser.git"
+    "url": "git+https://github.com/learn-cs-course/mit-6.035-sp21.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/LeuisKen/css-linear-gradient-parser/issues"
+    "url": "https://github.com/learn-cs-course/mit-6.035-sp21/issues"
   },
-  "homepage": "https://github.com/LeuisKen/css-linear-gradient-parser#readme",
+  "homepage": "https://github.com/learn-cs-course/mit-6.035-sp21#readme",
   "devDependencies": {
     "@reskript/cli": "^2.2.2",
     "@reskript/cli-lint": "^2.2.2",
