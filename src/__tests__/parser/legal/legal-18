@@ -1,0 +1,4 @@
+void main() {
+  foo();	// semantically bad, but gramatically ok
+}
+void foo() {}
