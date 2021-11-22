@@ -100,6 +100,15 @@ export class Scanner {
     }
 
     /**
+     * 当前读取位置
+     *
+     * @returns 当前读取位置
+     */
+    getTextPos(): number {
+        return this.pos;
+    }
+
+    /**
      * 设置词法分析错误回调函数
      *
      * @param onError 回调函数

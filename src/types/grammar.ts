@@ -12,6 +12,8 @@ export const enum SyntaxKind {
 
     // keywords
     BoolKeyword,
+    IntKeyword,
+    VoidKeyword,
     BreakKeyword,
     ContinueKeyword,
     ElseKeyword,
@@ -19,11 +21,9 @@ export const enum SyntaxKind {
     ForKeyword,
     IfKeyword,
     ImportKeyword,
-    IntKeyword,
     LenKeyword,
     ReturnKeyword,
     TrueKeyword,
-    VoidKeyword,
     WhileKeyword,
 
     // tokens
@@ -54,6 +54,38 @@ export const enum SyntaxKind {
     EqualsToken,
     PlusEqualsToken,
     MinusEqualsToken,
+
+    // Top level
+    Program,
+
+    // Declaration
+    ImportDeclaration,
+    FieldDeclaration,
+    MethodDeclaration,
+
+    // Statement
+    AssignmentStatement,
+    CallStatement,
+    BreakStatement,
+    ContinueStatement,
+    WhileStatement,
+    ReturnStatement,
+    IfStatement,
+    ForStatement,
+
+    // Expression
+    CallExpression,
+    BinaryExpression,
+    UnaryExpression,
+    ParenthesizedExpression,
+
+    // Element
+    ArrayDeclaration,
+    Parameter,
+    Block,
+    ArrayLocation,
+    ForInitializer,
+    ForIncrement,
 }
 
 export type KeywordSyntaxKind = SyntaxKind.BoolKeyword
@@ -182,4 +214,214 @@ export const enum CharacterCodes {
     formFeed = 0x0C, // \f
     tab = 0x09, // \t
     verticalTab = 0x0B, // \v
+}
+
+/**
+ * Ast Base Node
+ */
+interface BaseNode {
+    pos: number;
+    end: number;
+}
+
+export interface ProgramNode extends BaseNode {
+    kind: SyntaxKind.Program;
+    importDeclarations: ImportDeclarationNode[];
+    fieldDeclarations: FieldDeclarationNode[];
+    methodDeclarations: MethodDeclarationNode[];
+}
+
+export interface ImportDeclarationNode extends BaseNode {
+    kind: SyntaxKind.ImportDeclaration;
+    importName: IdentifierNode;
+}
+
+export interface FieldDeclarationNode extends BaseNode {
+    kind: SyntaxKind.FieldDeclaration;
+    type: SyntaxKind.IntKeyword | SyntaxKind.BoolKeyword;
+    declarations: DeclarationNode[];
+}
+
+export interface MethodDeclarationNode extends BaseNode {
+    kind: SyntaxKind.MethodDeclaration;
+    name: IdentifierNode;
+    parameters: ParameterNode[];
+    returnType: SyntaxKind.IntKeyword | SyntaxKind.BoolKeyword | SyntaxKind.VoidKeyword;
+    body: BlockNode;
+}
+
+export type DeclarationNode = IdentifierNode | ArrayDeclarationNode;
+
+export interface IdentifierNode extends BaseNode {
+    kind: SyntaxKind.Identifier;
+    name: string;
+}
+
+export interface ArrayDeclarationNode extends BaseNode {
+    kind: SyntaxKind.ArrayDeclaration;
+    name: IdentifierNode;
+    size: IntLiteralNode;
+}
+
+export interface ParameterNode extends BaseNode {
+    kind: SyntaxKind.Parameter;
+    name: IdentifierNode;
+    type: SyntaxKind.IntKeyword | SyntaxKind.BoolKeyword;
+}
+
+export interface BlockNode extends BaseNode {
+    kind: SyntaxKind.Block;
+    fields: FieldDeclarationNode[];
+    statements: StatementNode[];
+}
+
+export type StatementNode = AssignmentStatementNode
+    | CallStatementNode
+    | IfStatementNode
+    | ForStatementNode
+    | WhileStatementNode
+    | ReturnStatementNode
+    | BreakStatementNode
+    | ContinueStatementNode;
+
+export interface CallStatementNode extends BaseNode {
+    kind: SyntaxKind.CallStatement;
+    expression: CallExpressionNode;
+}
+
+export interface IfStatementNode extends BaseNode {
+    kind: SyntaxKind.IfStatement;
+    condition: ExpressionNode;
+    thenBlock: BlockNode;
+    elseBlock?: BlockNode;
+}
+
+export interface ForStatementNode extends BaseNode {
+    kind: SyntaxKind.ForStatement;
+    initializer: ForInitializerNode;
+    condition: ExpressionNode;
+    increment: ForIncrementNode;
+    body: BlockNode;
+}
+
+export interface ForInitializerNode extends BaseNode {
+    kind: SyntaxKind.ForInitializer;
+    declaration: IdentifierNode;
+    expression: ExpressionNode;
+}
+
+export interface ForIncrementNode extends BaseNode {
+    kind: SyntaxKind.ForIncrement;
+    declaration: LocationNode;
+    operator: SyntaxKind.PlusEqualsToken
+        | SyntaxKind.MinusEqualsToken
+        | SyntaxKind.PlusPlusToken
+        | SyntaxKind.MinusMinusToken;
+    expression?: ExpressionNode;
+}
+
+export interface WhileStatementNode extends BaseNode {
+    kind: SyntaxKind.WhileStatement;
+    condition: ExpressionNode;
+    body: BlockNode;
+}
+
+export interface ReturnStatementNode extends BaseNode {
+    kind: SyntaxKind.ReturnStatement;
+    expression?: ExpressionNode;
+}
+
+export interface BreakStatementNode extends BaseNode {
+    kind: SyntaxKind.BreakStatement;
+}
+
+export interface ContinueStatementNode extends BaseNode {
+    kind: SyntaxKind.ContinueStatement;
+}
+
+export interface AssignmentStatementNode extends BaseNode {
+    kind: SyntaxKind.AssignmentStatement;
+    left: LocationNode;
+    right?: ExpressionNode;
+    operator: SyntaxKind.EqualsToken
+        | SyntaxKind.PlusEqualsToken
+        | SyntaxKind.MinusEqualsToken
+        | SyntaxKind.PlusPlusToken
+        | SyntaxKind.MinusMinusToken;
+}
+
+export type ExpressionNode = LocationNode
+    | CallExpressionNode
+    | BinaryExpressionNode
+    | UnaryExpressionNode
+    | ParenthesizedExpressionNode
+    | LiteralNode;
+
+export type LocationNode = IdentifierNode | ArrayLocationNode;
+
+export interface ArrayLocationNode extends BaseNode {
+    kind: SyntaxKind.ArrayLocation;
+    name: IdentifierNode;
+    index: ExpressionNode;
+}
+
+export interface CallExpressionNode extends BaseNode {
+    kind: SyntaxKind.CallExpression;
+    callee: IdentifierNode;
+    arguments: Array<ExpressionNode | StringLiteralNode>;
+}
+
+export interface BinaryExpressionNode extends BaseNode {
+    kind: SyntaxKind.BinaryExpression;
+    left: ExpressionNode;
+    right: ExpressionNode;
+    operator: SyntaxKind.PlusToken
+        | SyntaxKind.MinusToken
+        | SyntaxKind.AsteriskToken
+        | SyntaxKind.SlashToken
+        | SyntaxKind.PercentToken
+        | SyntaxKind.GreaterThanToken
+        | SyntaxKind.LessThanToken
+        | SyntaxKind.GreaterThanEqualsToken
+        | SyntaxKind.LessThanEqualsToken
+        | SyntaxKind.EqualsEqualsToken
+        | SyntaxKind.ExclamationEqualsToken
+        | SyntaxKind.AmpersandAmpersandToken
+        | SyntaxKind.BarBarToken;
+}
+
+export interface UnaryExpressionNode extends BaseNode {
+    kind: SyntaxKind.UnaryExpression;
+    operator: SyntaxKind.MinusToken
+        | SyntaxKind.ExclamationToken;
+    operand: ExpressionNode;
+}
+
+export interface ParenthesizedExpressionNode extends BaseNode {
+    kind: SyntaxKind.ParenthesizedExpression;
+    expression: ExpressionNode;
+}
+
+export type LiteralNode = IntLiteralNode
+    | CharLiteralNode
+    | BoolLiteralNode;
+
+export interface IntLiteralNode extends BaseNode {
+    kind: SyntaxKind.IntLiteral;
+    value: string;
+}
+
+export interface CharLiteralNode extends BaseNode {
+    kind: SyntaxKind.CharLiteral;
+    value: string;
+}
+
+export interface BoolLiteralNode extends BaseNode {
+    kind: SyntaxKind.TrueKeyword | SyntaxKind.FalseKeyword;
+    value: boolean;
+}
+
+export interface StringLiteralNode extends BaseNode {
+    kind: SyntaxKind.StringLiteral;
+    value: string;
 }
