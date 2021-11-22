@@ -4,7 +4,7 @@ import main from '../main';
 
 const parserTestLegalDir = path.resolve(__dirname, 'parser/legal');
 // const legalCases = fs.readdirSync(parserTestLegalDir, 'utf-8');
-const legalCases = ['legal-01', 'legal-02'];
+const legalCases = ['legal-01', 'legal-02', 'legal-03'];
 
 describe('parser basic legal cases', () => {
 

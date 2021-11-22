@@ -368,8 +368,10 @@ export interface ArrayLocationNode extends BaseNode {
 export interface CallExpressionNode extends BaseNode {
     kind: SyntaxKind.CallExpression;
     callee: IdentifierNode;
-    arguments: Array<ExpressionNode | StringLiteralNode>;
+    arguments: ArgumentNode[];
 }
+
+export type ArgumentNode = ExpressionNode | StringLiteralNode;
 
 export interface BinaryExpressionNode extends BaseNode {
     kind: SyntaxKind.BinaryExpression;
