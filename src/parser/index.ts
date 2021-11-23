@@ -78,6 +78,8 @@ export class Parser {
             methodDeclarations,
         } = this.parseFieldOrMethodDeclarations();
 
+        this.expect(SyntaxKind.EndOfFileToken);
+
         return {
             kind: SyntaxKind.Program,
             importDeclarations,
@@ -152,6 +154,9 @@ export class Parser {
             }
             // 否则是 field 声明，这里的 if 只作为 type guard
             else if (type !== SyntaxKind.VoidKeyword) {
+                if (methodDeclarations.length > 0) {
+                    throw new Error('field declaration must be before method declaration');
+                }
                 fieldDeclarations.push(this.parseFieldDeclaration(type, identifier, pos));
             }
         }
@@ -278,8 +283,12 @@ export class Parser {
             });
 
             // 如果当前 token 是 ,，说明还有参数
-            if (this.getCurrentToken() === SyntaxKind.CommaToken) {
-                this.nextToken();
+            if (this.getCurrentToken() !== SyntaxKind.CommaToken) {
+                continue;
+            }
+            this.nextToken();
+            if (this.getCurrentToken() === SyntaxKind.CloseParenToken) {
+                throw new Error('parameter list must not end with comma');
             }
         }
 
@@ -862,8 +871,12 @@ export class Parser {
         const args: ArgumentNode[] = [];
         while (this.getCurrentToken() !== SyntaxKind.CloseParenToken) {
             args.push(this.parseArgument());
-            if (this.getCurrentToken() !== SyntaxKind.CloseParenToken) {
-                this.expect(SyntaxKind.CommaToken);
+            if (this.getCurrentToken() === SyntaxKind.CloseParenToken) {
+                break;
+            }
+            this.expect(SyntaxKind.CommaToken);
+            if (this.getCurrentToken() === SyntaxKind.CloseParenToken) {
+                throw new Error('no extra comma');
             }
         }
         return args;
