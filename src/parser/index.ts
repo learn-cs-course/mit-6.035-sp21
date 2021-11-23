@@ -341,12 +341,16 @@ export class Parser {
             case SyntaxKind.ReturnKeyword:
                 return this.parseReturnStatement();
             case SyntaxKind.BreakKeyword:
+                this.expect(SyntaxKind.BreakKeyword);
+                this.expect(SyntaxKind.SemicolonToken);
                 return {
                     kind: SyntaxKind.BreakStatement,
                     pos: this.scanner.getTokenPos(),
                     end: this.scanner.getTextPos() - 1,
                 };
             case SyntaxKind.ContinueKeyword:
+                this.expect(SyntaxKind.ContinueKeyword);
+                this.expect(SyntaxKind.SemicolonToken);
                 return {
                     kind: SyntaxKind.ContinueStatement,
                     pos: this.scanner.getTokenPos(),
@@ -459,9 +463,8 @@ export class Parser {
                 };
             }
             // 相当于
-            // case SyntaxKind.PlusEqualsToken:
-            // case SyntaxKind.MinusEqualsToken:
-            default:
+            case SyntaxKind.PlusEqualsToken:
+            case SyntaxKind.MinusEqualsToken:
             {
                 const operator = this.getCurrentToken() as SyntaxKind.PlusEqualsToken | SyntaxKind.MinusEqualsToken;
                 this.nextToken();
@@ -476,6 +479,8 @@ export class Parser {
                     end: this.scanner.getTextPos() - 1,
                 };
             }
+            default:
+                throw new Error(`Unexpected token ${this.getCurrentToken()}`);
         }
     }
 
@@ -543,6 +548,7 @@ export class Parser {
      */
     private parseCallStatement(identifier: IdentifierNode): CallStatementNode {
         const expression = this.parseCallExpression(identifier);
+        this.expect(SyntaxKind.SemicolonToken);
         return {
             kind: SyntaxKind.CallStatement,
             expression,
@@ -568,6 +574,7 @@ export class Parser {
                     SyntaxKind.PlusEqualsToken
                     | SyntaxKind.MinusEqualsToken
                     | SyntaxKind.EqualsToken;
+                this.nextToken();
                 const right = this.parseExpression();
                 this.expect(SyntaxKind.SemicolonToken);
                 return {
@@ -579,9 +586,8 @@ export class Parser {
                     end: this.scanner.getTextPos() - 1,
                 };
             }
-            // case SyntaxKind.PlusPlusToken:
-            // case SyntaxKind.MinusMinusToken:
-            default:
+            case SyntaxKind.PlusPlusToken:
+            case SyntaxKind.MinusMinusToken:
             {
                 const operator = this.getCurrentToken() as SyntaxKind.PlusPlusToken | SyntaxKind.MinusMinusToken;
                 this.expect(SyntaxKind.SemicolonToken);
@@ -593,6 +599,8 @@ export class Parser {
                     end: this.scanner.getTextPos() - 1,
                 };
             }
+            default:
+                throw new Error(`Unexpected token ${this.getCurrentToken()}`);
         }
     }
 
@@ -626,32 +634,154 @@ export class Parser {
      * @returns
      */
     private parseExpression(): ExpressionNode {
-        return this.parseBinaryExpression();
+        return this.parseLogicalOrExpression();
     }
 
-    private parseBinaryExpression(): ExpressionNode {
-        const left = this.parseUnaryExpression();
-        const operator = this.getCurrentToken();
-        if (operator === SyntaxKind.PlusToken
-            || operator === SyntaxKind.MinusToken
-            || operator === SyntaxKind.AsteriskToken
-            || operator === SyntaxKind.SlashToken
-            || operator === SyntaxKind.PercentToken
-            || operator === SyntaxKind.EqualsEqualsToken
-            || operator === SyntaxKind.ExclamationEqualsToken
-        ) {
-            this.nextToken();
-            const right = this.parseBinaryExpression();
-            return {
-                kind: SyntaxKind.BinaryExpression,
-                left,
-                operator,
-                right,
-                pos: left.pos,
-                end: right.end,
-            };
+    private parseLogicalOrExpression(): ExpressionNode {
+        const left = this.parseLogicalAndExpression();
+        if (this.getCurrentToken() !== SyntaxKind.BarBarToken) {
+            return left;
         }
-        return left;
+        this.nextToken();
+        const right = this.parseLogicalOrExpression();
+        return {
+            kind: SyntaxKind.BinaryExpression,
+            left,
+            right,
+            operator: SyntaxKind.BarBarToken,
+            pos: left.pos,
+            end: right.end,
+        };
+    }
+
+    private parseLogicalAndExpression(): ExpressionNode {
+        const left = this.parseEqualityExpression();
+        if (this.getCurrentToken() !== SyntaxKind.AmpersandAmpersandToken) {
+            return left;
+        }
+        this.nextToken();
+        const right = this.parseLogicalAndExpression();
+        return {
+            kind: SyntaxKind.BinaryExpression,
+            left,
+            right,
+            operator: SyntaxKind.AmpersandAmpersandToken,
+            pos: left.pos,
+            end: right.end,
+        };
+    }
+
+    private parseEqualityExpression(): ExpressionNode {
+        const left = this.parseRelationalExpression();
+        switch (this.getCurrentToken()) {
+            case SyntaxKind.EqualsEqualsToken:
+            case SyntaxKind.ExclamationEqualsToken:
+            {
+                const operator = this.getCurrentToken() as
+                    SyntaxKind.EqualsEqualsToken
+                    | SyntaxKind.ExclamationEqualsToken;
+                this.nextToken();
+                const right = this.parseEqualityExpression();
+                return {
+                    kind: SyntaxKind.BinaryExpression,
+                    left,
+                    right,
+                    operator,
+                    pos: left.pos,
+                    end: right.end,
+                };
+            }
+            default:
+                return left;
+        }
+    }
+
+    private parseRelationalExpression(): ExpressionNode {
+        const left = this.parseAdditiveExpression();
+        switch (this.getCurrentToken()) {
+            case SyntaxKind.LessThanToken:
+            case SyntaxKind.LessThanEqualsToken:
+            case SyntaxKind.GreaterThanToken:
+            case SyntaxKind.GreaterThanEqualsToken:
+            {
+                const operator = this.getCurrentToken() as
+                    SyntaxKind.LessThanToken
+                    | SyntaxKind.LessThanEqualsToken
+                    | SyntaxKind.GreaterThanToken
+                    | SyntaxKind.GreaterThanEqualsToken;
+                this.nextToken();
+                const right = this.parseRelationalExpression();
+                return {
+                    kind: SyntaxKind.BinaryExpression,
+                    left,
+                    right,
+                    operator,
+                    pos: left.pos,
+                    end: right.end,
+                };
+            }
+            default:
+                return left;
+        }
+    }
+
+    private parseAdditiveExpression(): ExpressionNode {
+        let expr = this.parseMultiplicativeExpression();
+
+        while (true) {
+            switch (this.getCurrentToken()) {
+                case SyntaxKind.PlusToken:
+                case SyntaxKind.MinusToken:
+                {
+                    const operator = this.getCurrentToken() as
+                        SyntaxKind.PlusToken
+                        | SyntaxKind.MinusToken;
+                    this.nextToken();
+                    const right = this.parseMultiplicativeExpression();
+                    expr = {
+                        kind: SyntaxKind.BinaryExpression,
+                        left: expr,
+                        right,
+                        operator,
+                        pos: expr.pos,
+                        end: right.end,
+                    };
+                    continue;
+                }
+                default:
+                    return expr;
+            }
+        }
+    }
+
+    private parseMultiplicativeExpression(): ExpressionNode {
+        let expr = this.parseUnaryExpression();
+        while (true) {
+            switch (this.getCurrentToken()) {
+                case SyntaxKind.AsteriskToken:
+                case SyntaxKind.SlashToken:
+                case SyntaxKind.PercentToken:
+                {
+                    const operator = this.getCurrentToken() as
+                        SyntaxKind.AsteriskToken
+                        | SyntaxKind.SlashToken
+                        | SyntaxKind.PercentToken;
+                    this.nextToken();
+                    const right = this.parseUnaryExpression();
+                    expr = {
+                        kind: SyntaxKind.BinaryExpression,
+                        left: expr,
+                        right,
+                        operator,
+                        pos: expr.pos,
+                        end: right.end,
+                    };
+                    continue;
+                }
+                default:
+                    return expr;
+            }
+        }
     }
 
     private parseUnaryExpression(): ExpressionNode {
@@ -683,10 +813,19 @@ export class Parser {
             }
             case SyntaxKind.TrueKeyword:
             case SyntaxKind.FalseKeyword:
+            case SyntaxKind.IntLiteral:
+            case SyntaxKind.CharLiteral:
                 return this.parseLiteral();
             case SyntaxKind.Identifier:
             {
-                return this.parseIdentifier();
+                const identifier = this.parseIdentifier();
+                if (this.getCurrentToken() === SyntaxKind.OpenBracketToken) {
+                    return this.parseLocationNode(identifier);
+                }
+                else if (this.getCurrentToken() === SyntaxKind.OpenParenToken) {
+                    return this.parseCallExpression(identifier);
+                }
+                return identifier;
             }
             default:
             {
@@ -738,9 +877,11 @@ export class Parser {
     private parseArgument(): ArgumentNode {
         if (this.getCurrentToken() === SyntaxKind.StringLiteral) {
             const pos = this.scanner.getTokenPos();
+            const value = this.scanner.getTokenValue()!;
+            this.nextToken();
             return {
                 kind: SyntaxKind.StringLiteral,
-                value: this.scanner.getTokenValue()!,
+                value,
                 pos,
                 end: this.scanner.getTextPos() - 1,
             };
@@ -761,6 +902,7 @@ export class Parser {
             case SyntaxKind.IntLiteral:
                 return this.parseIntLiteral();
             case SyntaxKind.TrueKeyword:
+                this.nextToken();
                 return {
                     kind: SyntaxKind.TrueKeyword,
                     value: true,
@@ -768,13 +910,15 @@ export class Parser {
                     end: this.scanner.getTextPos() - 1,
                 };
             case SyntaxKind.FalseKeyword:
-            default:
+                this.nextToken();
                 return {
                     kind: SyntaxKind.FalseKeyword,
                     value: false,
                     pos: this.scanner.getTokenPos(),
                     end: this.scanner.getTextPos() - 1,
                 };
+            default:
+                throw new Error(`Unexpected token ${this.getCurrentToken()}`);
         }
     }
 
@@ -805,7 +949,7 @@ export class Parser {
      */
     private parseCharLiteral(): CharLiteralNode {
         const pos = this.scanner.getTokenPos();
-        this.expect(SyntaxKind.CharLiteral);
+        this.expect(SyntaxKind.CharLiteral, false);
         const value = this.scanner.getTokenValue()!;
         this.nextToken();
 
