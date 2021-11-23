@@ -646,6 +646,11 @@ export class Parser {
         return this.parseLogicalOrExpression();
     }
 
+    /**
+     * 解析一个逻辑或表达式
+     *
+     * @returns
+     */
     private parseLogicalOrExpression(): ExpressionNode {
         const left = this.parseLogicalAndExpression();
         if (this.getCurrentToken() !== SyntaxKind.BarBarToken) {
@@ -663,6 +668,11 @@ export class Parser {
         };
     }
 
+    /**
+     * 解析一个逻辑与表达式
+     *
+     * @returns
+     */
     private parseLogicalAndExpression(): ExpressionNode {
         const left = this.parseEqualityExpression();
         if (this.getCurrentToken() !== SyntaxKind.AmpersandAmpersandToken) {
@@ -680,6 +690,11 @@ export class Parser {
         };
     }
 
+    /**
+     * 解析一个判等表达式
+     *
+     * @returns
+     */
     private parseEqualityExpression(): ExpressionNode {
         const left = this.parseRelationalExpression();
         switch (this.getCurrentToken()) {
@@ -705,6 +720,11 @@ export class Parser {
         }
     }
 
+    /**
+     * 解析一个关系表达式
+     *
+     * @returns
+     */
     private parseRelationalExpression(): ExpressionNode {
         const left = this.parseAdditiveExpression();
         switch (this.getCurrentToken()) {
@@ -734,7 +754,13 @@ export class Parser {
         }
     }
 
+    /**
+     * 解析一个加法表达式
+     *
+     * @returns
+     */
     private parseAdditiveExpression(): ExpressionNode {
+        // 这里的 let 是为了处理左结合性
         let expr = this.parseMultiplicativeExpression();
 
         while (true) {
@@ -747,6 +773,8 @@ export class Parser {
                         | SyntaxKind.MinusToken;
                     this.nextToken();
                     const right = this.parseMultiplicativeExpression();
+                    // 由于左结合性
+                    // 之前左边的解析出来的 expr 需要变成新 expr 的孩子节点
                     expr = {
                         kind: SyntaxKind.BinaryExpression,
                         left: expr,
@@ -763,6 +791,11 @@ export class Parser {
         }
     }
 
+    /**
+     * 解析一个乘法表达式
+     *
+     * @returns
+     */
     private parseMultiplicativeExpression(): ExpressionNode {
         let expr = this.parseUnaryExpression();
         while (true) {
@@ -777,6 +810,7 @@ export class Parser {
                         | SyntaxKind.PercentToken;
                     this.nextToken();
                     const right = this.parseUnaryExpression();
+                    // 左结合性处理，同上
                     expr = {
                         kind: SyntaxKind.BinaryExpression,
                         left: expr,
@@ -793,6 +827,11 @@ export class Parser {
         }
     }
 
+    /**
+     * 解析一个一元表达式
+     *
+     * @returns
+     */
     private parseUnaryExpression(): ExpressionNode {
         const operator = this.getCurrentToken();
         if (operator === SyntaxKind.MinusToken
@@ -811,6 +850,11 @@ export class Parser {
         return this.parsePrimaryExpression();
     }
 
+    /**
+     * 解析一个 Primary 表达式，包括 ( expr ) 以及一些基本表达式
+     *
+     * @returns
+     */
     private parsePrimaryExpression(): ExpressionNode {
         switch (this.getCurrentToken()) {
             case SyntaxKind.OpenParenToken:
@@ -1019,13 +1063,11 @@ export class Parser {
      * @param goAhead 是否前进到下一个 token，默认为 true
      */
     private expect(kind: SyntaxKind, goAhead: boolean = true): void {
-        if (this.currentToken === kind) {
-            if (goAhead) {
-                this.nextToken();
-            }
-        }
-        else {
+        if (this.currentToken !== kind) {
             throw new Error(`Expected ${kind}, got ${this.currentToken}`);
+        }
+        if (goAhead) {
+            this.nextToken();
         }
     }
 }
