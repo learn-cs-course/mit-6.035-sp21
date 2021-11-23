@@ -618,9 +618,81 @@ export class Parser {
         };
     }
 
-    // @ts-expect-error
+    /**
+     * 基本上语法中的二义性问题都在 parseExpression 这里了
+     * 所以后面里面的各种 parseXXX 都返回的是 ExpressionNode
+     * 因为消除左递归的原因，有可能会把孩子直接返回出来
+     *
+     * @returns
+     */
     private parseExpression(): ExpressionNode {
+        return this.parseBinaryExpression();
+    }
 
+    private parseBinaryExpression(): ExpressionNode {
+        const left = this.parseUnaryExpression();
+        const operator = this.getCurrentToken();
+        if (operator === SyntaxKind.PlusToken
+            || operator === SyntaxKind.MinusToken
+            || operator === SyntaxKind.AsteriskToken
+            || operator === SyntaxKind.SlashToken
+            || operator === SyntaxKind.PercentToken
+            || operator === SyntaxKind.EqualsEqualsToken
+            || operator === SyntaxKind.ExclamationEqualsToken
+        ) {
+            this.nextToken();
+            const right = this.parseBinaryExpression();
+            return {
+                kind: SyntaxKind.BinaryExpression,
+                left,
+                operator,
+                right,
+                pos: left.pos,
+                end: right.end,
+            };
+        }
+        return left;
+    }
+
+    private parseUnaryExpression(): ExpressionNode {
+        const operator = this.getCurrentToken();
+        if (operator === SyntaxKind.MinusToken
+            || operator === SyntaxKind.ExclamationToken
+        ) {
+            this.nextToken();
+            const operand = this.parseUnaryExpression();
+            return {
+                kind: SyntaxKind.UnaryExpression,
+                operator,
+                operand,
+                pos: this.scanner.getTokenPos(),
+                end: operand.end,
+            };
+        }
+        return this.parsePrimaryExpression();
+    }
+
+    private parsePrimaryExpression(): ExpressionNode {
+        switch (this.getCurrentToken()) {
+            case SyntaxKind.OpenParenToken:
+            {
+                this.nextToken();
+                const expression = this.parseExpression();
+                this.expect(SyntaxKind.CloseParenToken);
+                return expression;
+            }
+            case SyntaxKind.TrueKeyword:
+            case SyntaxKind.FalseKeyword:
+                return this.parseLiteral();
+            case SyntaxKind.Identifier:
+            {
+                return this.parseIdentifier();
+            }
+            default:
+            {
+                throw new Error(`Unexpected token ${this.getCurrentToken()}`);
+            }
+        }
     }
 
     /**
