@@ -8,5 +8,5 @@ export function bindReturnStatement(returnStatement: ReturnStatementNode, contex
         returnStatement.expression.parent = returnStatement;
         bindExpression(returnStatement.expression, context);
     }
-    context.ruleRegistry.emit(returnStatement, 'enter');
+    context.ruleRegistry.emit(returnStatement, 'exit');
 }

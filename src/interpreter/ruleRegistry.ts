@@ -6,9 +6,25 @@ import {BaseNode} from '../types/grammar';
 import {RuleObject, Rule} from './ruleType';
 import {SymbolTable} from './symbolTable';
 import noRedeclare from './rules/noRedeclare';
+import noUseBeforeDefine from './rules/noUseBeforeDefine';
+import noInvalidMainMethod from './rules/noInvalidMainMethod';
+import noBadArraySize from './rules/noBadArraySize';
+import noArgumentMismatch from './rules/noArgumentMismatch';
+import returnValueMissmatich from './rules/returnValueMissmatich';
+import noInvalidArrayIndex from './rules/noInvalidArrayIndex';
+import noInvalidAssign from './rules/noInvalidAssign';
+import noInvalidConditional from './rules/noInvalidConditional';
 
 const registedRules: RuleObject[] = [
     noRedeclare,
+    noUseBeforeDefine,
+    noInvalidMainMethod,
+    noBadArraySize,
+    noArgumentMismatch,
+    returnValueMissmatich,
+    noInvalidArrayIndex,
+    noInvalidAssign,
+    noInvalidConditional,
 ];
 
 export class RuleRegistry {

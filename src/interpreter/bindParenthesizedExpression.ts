@@ -7,6 +7,7 @@ export function bindParenthesizedExpression(expression: ParenthesizedExpressionN
 
     expression.expression.parent = expression;
     bindExpression(expression.expression, context);
+    expression.nodeType = expression.expression.nodeType;
 
     context.ruleRegistry.emit(expression, 'exit');
 }

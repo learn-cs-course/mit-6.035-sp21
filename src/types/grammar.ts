@@ -1,5 +1,4 @@
 export const enum SyntaxKind {
-
     Unknown = 'Unknown',
     EndOfFileToken = 'EndOfFileToken',
 
@@ -216,12 +215,6 @@ export const enum CharacterCodes {
     verticalTab = 0x0B, // \v
 }
 
-interface IdentifierSymbol {
-    name: string;
-    type: Type;
-    declaration: DeclarationNode;
-}
-
 export const enum Type {
     Unknown,
     Bool,
@@ -229,7 +222,15 @@ export const enum Type {
     Int,
     IntArray,
     Char,
+    String,
     Method,
+    Void,
+}
+
+interface IdentifierSymbol {
+    name: string;
+    type: Type;
+    declaration: DeclarationNode;
 }
 
 /**
@@ -238,6 +239,7 @@ export const enum Type {
 export interface BaseNode {
     parent?: BaseNode;
     kind: SyntaxKind;
+    nodeType?: Type;
     pos: number;
     end: number;
 }
@@ -245,6 +247,7 @@ export interface BaseNode {
 export interface ProgramNode extends BaseNode {
     parent?: undefined;
     kind: SyntaxKind.Program;
+    nodeType?: Type.Void;
     importDeclarations: ImportDeclarationNode[];
     fieldDeclarations: FieldDeclarationNode[];
     methodDeclarations: MethodDeclarationNode[];
@@ -259,12 +262,14 @@ export type DeclarationNode = ImportDeclarationNode
 export interface ImportDeclarationNode extends BaseNode {
     parent?: ProgramNode;
     kind: SyntaxKind.ImportDeclaration;
+    nodeType?: Type.Void;
     importName: IdentifierNode;
 }
 
 export interface FieldDeclarationNode extends BaseNode {
     parent?: ProgramNode | BlockNode;
     kind: SyntaxKind.FieldDeclaration;
+    nodeType?: Type.Void;
     type: SyntaxKind.IntKeyword | SyntaxKind.BoolKeyword;
     declarations: VariableDeclarationNode[];
 }
@@ -272,6 +277,7 @@ export interface FieldDeclarationNode extends BaseNode {
 export interface MethodDeclarationNode extends BaseNode {
     parent?: ProgramNode;
     kind: SyntaxKind.MethodDeclaration;
+    nodeType?: Type.Void;
     name: IdentifierNode;
     parameters: ParameterNode[];
     returnType: SyntaxKind.IntKeyword | SyntaxKind.BoolKeyword | SyntaxKind.VoidKeyword;
@@ -299,25 +305,33 @@ export interface IdentifierNode extends BaseNode {
         | ArrayLocationNode
         | CallExpressionNode;
     kind: SyntaxKind.Identifier;
+    nodeType?: Type.Bool | Type.BoolArray | Type.Int | Type.IntArray | Type.Method | Type.Unknown;
     name: string;
 }
 
 export interface ArrayDeclarationNode extends BaseNode {
+    parent?: FieldDeclarationNode;
     kind: SyntaxKind.ArrayDeclaration;
+    nodeType?: Type.BoolArray | Type.IntArray | Type.Unknown;
     name: IdentifierNode;
     size: IntLiteralNode;
 }
 
 export interface ParameterNode extends BaseNode {
+    parent?: MethodDeclarationNode;
     kind: SyntaxKind.Parameter;
+    nodeType?: Type.Bool | Type.Int;
     name: IdentifierNode;
     type: SyntaxKind.IntKeyword | SyntaxKind.BoolKeyword;
 }
 
 export interface BlockNode extends BaseNode {
+    parent?: MethodDeclarationNode | IfStatementNode | ForStatementNode | WhileStatementNode;
     kind: SyntaxKind.Block;
+    nodeType?: Type.Void;
     fields: FieldDeclarationNode[];
     statements: StatementNode[];
+    locals?: Map<string, IdentifierSymbol>;
 }
 
 export type StatementNode = AssignmentStatementNode
@@ -330,19 +344,25 @@ export type StatementNode = AssignmentStatementNode
     | ContinueStatementNode;
 
 export interface CallStatementNode extends BaseNode {
+    parent?: BlockNode;
     kind: SyntaxKind.CallStatement;
+    nodeType?: Type.Bool | Type.Int | Type.Void | Type.Unknown;
     expression: CallExpressionNode;
 }
 
 export interface IfStatementNode extends BaseNode {
+    parent?: BlockNode;
     kind: SyntaxKind.IfStatement;
+    nodeType?: Type.Void;
     condition: ExpressionNode;
     thenBlock: BlockNode;
     elseBlock?: BlockNode;
 }
 
 export interface ForStatementNode extends BaseNode {
+    parent?: BlockNode;
     kind: SyntaxKind.ForStatement;
+    nodeType?: Type.Void;
     initializer: ForInitializerNode;
     condition: ExpressionNode;
     increment: ForIncrementNode;
@@ -350,13 +370,17 @@ export interface ForStatementNode extends BaseNode {
 }
 
 export interface ForInitializerNode extends BaseNode {
+    parent?: ForStatementNode;
     kind: SyntaxKind.ForInitializer;
+    nodeType?: Type.Void;
     declaration: IdentifierNode;
     expression: ExpressionNode;
 }
 
 export interface ForIncrementNode extends BaseNode {
+    parent?: ForStatementNode;
     kind: SyntaxKind.ForIncrement;
+    nodeType?: Type.Void;
     declaration: LocationNode;
     operator: SyntaxKind.PlusEqualsToken
         | SyntaxKind.MinusEqualsToken
@@ -366,26 +390,36 @@ export interface ForIncrementNode extends BaseNode {
 }
 
 export interface WhileStatementNode extends BaseNode {
+    parent?: BlockNode;
     kind: SyntaxKind.WhileStatement;
+    nodeType?: Type.Void;
     condition: ExpressionNode;
     body: BlockNode;
 }
 
 export interface ReturnStatementNode extends BaseNode {
+    parent?: BlockNode;
     kind: SyntaxKind.ReturnStatement;
+    nodeType?: Type.Void;
     expression?: ExpressionNode;
 }
 
 export interface BreakStatementNode extends BaseNode {
+    parent?: BlockNode;
     kind: SyntaxKind.BreakStatement;
+    nodeType?: Type.Void;
 }
 
 export interface ContinueStatementNode extends BaseNode {
+    parent?: BlockNode;
     kind: SyntaxKind.ContinueStatement;
+    nodeType?: Type.Void;
 }
 
 export interface AssignmentStatementNode extends BaseNode {
+    parent?: BlockNode;
     kind: SyntaxKind.AssignmentStatement;
+    nodeType?: Type.Void;
     left: LocationNode;
     right?: ExpressionNode;
     operator: SyntaxKind.EqualsToken
@@ -405,13 +439,17 @@ export type ExpressionNode = LocationNode
 export type LocationNode = IdentifierNode | ArrayLocationNode;
 
 export interface ArrayLocationNode extends BaseNode {
+    parent?: AssignmentStatementNode | CallExpressionNode;
     kind: SyntaxKind.ArrayLocation;
+    nodeType?: Type.Bool | Type.Int | Type.Unknown;
     name: IdentifierNode;
     index: ExpressionNode;
 }
 
 export interface CallExpressionNode extends BaseNode {
+    parent?: CallStatementNode;
     kind: SyntaxKind.CallExpression;
+    nodeType?: Type.Bool | Type.Int | Type.Void | Type.Unknown;
     callee: IdentifierNode;
     arguments: ArgumentNode[];
 }
@@ -419,7 +457,9 @@ export interface CallExpressionNode extends BaseNode {
 export type ArgumentNode = ExpressionNode | StringLiteralNode;
 
 export interface BinaryExpressionNode extends BaseNode {
+    parent?: ExpressionNode;
     kind: SyntaxKind.BinaryExpression;
+    nodeType?: Type.Bool | Type.Int | Type.Void;
     left: ExpressionNode;
     right: ExpressionNode;
     operator: SyntaxKind.PlusToken
@@ -438,14 +478,25 @@ export interface BinaryExpressionNode extends BaseNode {
 }
 
 export interface UnaryExpressionNode extends BaseNode {
+    parent?: ExpressionNode;
     kind: SyntaxKind.UnaryExpression;
+    nodeType?: Type.Bool | Type.Int | Type.Void;
     operator: SyntaxKind.MinusToken
         | SyntaxKind.ExclamationToken;
     operand: ExpressionNode;
 }
 
 export interface ParenthesizedExpressionNode extends BaseNode {
+    parent?: ExpressionNode;
     kind: SyntaxKind.ParenthesizedExpression;
+    nodeType?: Type.Bool
+        | Type.BoolArray
+        | Type.Int
+        | Type.IntArray
+        | Type.Char
+        | Type.Void
+        | Type.Unknown
+        | Type.Method;
     expression: ExpressionNode;
 }
 
@@ -454,21 +505,40 @@ export type LiteralNode = IntLiteralNode
     | BoolLiteralNode;
 
 export interface IntLiteralNode extends BaseNode {
+    parent?: ExpressionNode;
     kind: SyntaxKind.IntLiteral;
+    nodeType?: Type.Int;
     value: string;
 }
 
 export interface CharLiteralNode extends BaseNode {
+    parent?: ExpressionNode;
     kind: SyntaxKind.CharLiteral;
+    nodeType?: Type.Char;
     value: string;
 }
 
 export interface BoolLiteralNode extends BaseNode {
+    parent?: ExpressionNode;
     kind: SyntaxKind.TrueKeyword | SyntaxKind.FalseKeyword;
+    nodeType?: Type.Bool;
     value: boolean;
 }
 
 export interface StringLiteralNode extends BaseNode {
+    parent?: CallExpressionNode;
     kind: SyntaxKind.StringLiteral;
+    nodeType?: Type.String;
     value: string;
 }
+
+/**
+ * ast 叶子节点
+ */
+export type LeafNode = IdentifierNode
+    | BreakStatementNode
+    | ContinueStatementNode
+    | StringLiteralNode
+    | IntLiteralNode
+    | CharLiteralNode
+    | BoolLiteralNode;

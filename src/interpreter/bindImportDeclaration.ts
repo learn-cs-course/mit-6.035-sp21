@@ -15,9 +15,10 @@ export function bindImportDeclaration(
 
     context.symbolTable.addSymbol({
         name: importDeclaration.importName.name,
-        type: Type.Unknown,
+        type: Type.Method,
         declaration: importDeclaration,
     });
+    importDeclaration.nodeType = Type.Void;
 
     context.ruleRegistry.emit(importDeclaration, 'exit');
 

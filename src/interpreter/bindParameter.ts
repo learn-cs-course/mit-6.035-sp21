@@ -14,6 +14,7 @@ export function bindParameter(parameter: ParameterNode, context: BindContext): v
         type: parameter.type === SyntaxKind.IntKeyword ? Type.Int : Type.Bool,
         declaration: parameter,
     });
+    parameter.nodeType = parameter.type === SyntaxKind.IntKeyword ? Type.Int : Type.Bool;
 
     context.ruleRegistry.emit(parameter, 'exit');
 }

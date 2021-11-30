@@ -34,6 +34,13 @@ const rule: RuleObject = {
                     context.report(`${name} has been declared`);
                 }
             },
+            [SyntaxKind.Parameter](node) {
+                const name = node.name.name;
+                const symbol = context.symbolTable.findInCurrent(name);
+                if (symbol) {
+                    context.report(`${name} has been declared`);
+                }
+            },
         };
     },
 };

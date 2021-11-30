@@ -44,6 +44,7 @@ export function bindFieldDeclaration(
             declaration: fieldDeclaration,
         });
     });
+    fieldDeclaration.nodeType = Type.Void;
 
     context.ruleRegistry.emit(fieldDeclaration, 'exit');
 }

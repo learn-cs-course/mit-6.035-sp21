@@ -2,7 +2,7 @@
  * @file 语义规则检查
  */
 
-import {ProgramNode} from '../types/grammar';
+import {ProgramNode, Type} from '../types/grammar';
 import {bindFieldDeclaration} from './bindFieldDeclaration';
 import {bindImportDeclaration} from './bindImportDeclaration';
 import {bindMethodDeclaration} from './bindMethodDeclaration';
@@ -48,6 +48,7 @@ export function bindProgram(program: ProgramNode): void {
     });
 
     program.globals = symbolTable.getCurrentScope()?.symbols;
+    program.nodeType = Type.Void;
     symbolTable.exitScope();
-    ruleRegistry.emit(program, 'enter');
+    ruleRegistry.emit(program, 'exit');
 }

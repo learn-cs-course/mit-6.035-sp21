@@ -15,6 +15,7 @@ export function bindBlock(block: BlockNode, context: BindContext): void {
         statement.parent = block;
         bindStatement(statement, context);
     });
+    block.locals = context.symbolTable.getCurrentScope()?.symbols;
 
     context.ruleRegistry.emit(block, 'exit');
 }

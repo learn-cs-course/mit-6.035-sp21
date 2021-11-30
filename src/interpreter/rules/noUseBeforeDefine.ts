@@ -1,5 +1,5 @@
 /**
- * @file 变量不得重复声明
+ * @file 变量先声明后使用
  */
 
 import {RuleObject} from '../ruleType';
@@ -18,9 +18,14 @@ const rule: RuleObject = {
                     case SyntaxKind.Parameter:
                         break;
                     default:
+                    {
+                        const symbol = context.symbolTable.find(node.name);
+                        if (symbol) {
+                            return;
+                        }
                         context.report('identifier used before being declared');
+                    }
                 }
-
             },
         };
     },

@@ -4,6 +4,16 @@ import {
     ImportDeclarationNode,
     FieldDeclarationNode,
     MethodDeclarationNode,
+    ParameterNode,
+    ArrayDeclarationNode,
+    AssignmentStatementNode,
+    IfStatementNode,
+    ForStatementNode,
+    ForInitializerNode,
+    WhileStatementNode,
+    ReturnStatementNode,
+    CallExpressionNode,
+    ArrayLocationNode,
     IdentifierNode,
 } from '../types/grammar';
 import {SymbolTable} from './symbolTable';
@@ -22,6 +32,26 @@ export interface Rule {
     ['FieldDeclaration:exit']?: (node: FieldDeclarationNode) => void;
     [SyntaxKind.MethodDeclaration]?: (node: MethodDeclarationNode) => void;
     ['MethodDeclaration:exit']?: (node: MethodDeclarationNode) => void;
+    [SyntaxKind.Parameter]?: (node: ParameterNode) => void;
+    ['Parameter:exit']?: (node: ParameterNode) => void;
+    [SyntaxKind.ArrayDeclaration]?: (node: ArrayDeclarationNode) => void;
+    ['ArrayDeclaration:exit']?: (node: ArrayDeclarationNode) => void;
+    [SyntaxKind.AssignmentStatement]?: (node: AssignmentStatementNode) => void;
+    ['AssignmentStatement:exit']?: (node: AssignmentStatementNode) => void;
+    [SyntaxKind.IfStatement]?: (node: IfStatementNode) => void;
+    ['IfStatement:exit']?: (node: IfStatementNode) => void;
+    [SyntaxKind.ForStatement]?: (node: ForStatementNode) => void;
+    ['ForStatement:exit']?: (node: ForStatementNode) => void;
+    [SyntaxKind.ForInitializer]?: (node: ForInitializerNode) => void;
+    ['ForInitializer:exit']?: (node: ForInitializerNode) => void;
+    [SyntaxKind.WhileStatement]?: (node: WhileStatementNode) => void;
+    ['WhileStatement:exit']?: (node: WhileStatementNode) => void;
+    [SyntaxKind.ReturnStatement]?: (node: ReturnStatementNode) => void;
+    ['ReturnStatement:exit']?: (node: ReturnStatementNode) => void;
+    [SyntaxKind.CallExpression]?: (node: CallExpressionNode) => void;
+    ['CallExpression:exit']?: (node: CallExpressionNode) => void;
+    [SyntaxKind.ArrayLocation]?: (node: ArrayLocationNode) => void;
+    ['ArrayLocation:exit']?: (node: ArrayLocationNode) => void;
     [SyntaxKind.Identifier]?: (node: IdentifierNode) => void;
     ['Identifier:exit']?: (node: IdentifierNode) => void;
 }

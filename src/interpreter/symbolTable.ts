@@ -35,6 +35,7 @@ export class SymbolTable {
 
     exitScope() {
         this.stack.pop();
+        this.currentScope = this.stack[this.stack.length - 1];
     }
 
     findInCurrent(name: string) {
