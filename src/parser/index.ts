@@ -599,6 +599,7 @@ export class Parser {
             case SyntaxKind.MinusMinusToken:
             {
                 const operator = this.getCurrentToken() as SyntaxKind.PlusPlusToken | SyntaxKind.MinusMinusToken;
+                this.nextToken();
                 this.expect(SyntaxKind.SemicolonToken);
                 return {
                     kind: SyntaxKind.AssignmentStatement,

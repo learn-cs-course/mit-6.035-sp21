@@ -216,12 +216,30 @@ export const enum CharacterCodes {
     verticalTab = 0x0B, // \v
 }
 
+interface IdentifierSymbol {
+    name: string;
+    type: Type;
+    declaration: DeclarationNode;
+}
+
+export const enum Type {
+    Unknown,
+    Bool,
+    BoolArray,
+    Int,
+    IntArray,
+    Char,
+    Method,
+}
+
 /**
  * Ast Base Node
  */
-interface BaseNode {
+export interface BaseNode {
+    kind: SyntaxKind;
     pos: number;
     end: number;
+    parent?: BaseNode;
 }
 
 export interface ProgramNode extends BaseNode {
@@ -229,7 +247,13 @@ export interface ProgramNode extends BaseNode {
     importDeclarations: ImportDeclarationNode[];
     fieldDeclarations: FieldDeclarationNode[];
     methodDeclarations: MethodDeclarationNode[];
+    globals?: Map<string, IdentifierSymbol>;
 }
+
+export type DeclarationNode = ImportDeclarationNode
+    | FieldDeclarationNode
+    | MethodDeclarationNode
+    | ParameterNode;
 
 export interface ImportDeclarationNode extends BaseNode {
     kind: SyntaxKind.ImportDeclaration;
@@ -239,7 +263,7 @@ export interface ImportDeclarationNode extends BaseNode {
 export interface FieldDeclarationNode extends BaseNode {
     kind: SyntaxKind.FieldDeclaration;
     type: SyntaxKind.IntKeyword | SyntaxKind.BoolKeyword;
-    declarations: DeclarationNode[];
+    declarations: VariableDeclarationNode[];
 }
 
 export interface MethodDeclarationNode extends BaseNode {
@@ -250,7 +274,7 @@ export interface MethodDeclarationNode extends BaseNode {
     body: BlockNode;
 }
 
-export type DeclarationNode = IdentifierNode | ArrayDeclarationNode;
+export type VariableDeclarationNode = IdentifierNode | ArrayDeclarationNode;
 
 export interface IdentifierNode extends BaseNode {
     kind: SyntaxKind.Identifier;

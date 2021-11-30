@@ -3,6 +3,7 @@ import * as path from 'path';
 import {handleScan} from './handleScan';
 import {Scanner} from './scanner';
 import {Parser} from './parser';
+import {bindProgram} from './interpreter/bindProgram';
 
 interface Options {
     target: 'scan' | 'parse' | 'inter' | 'assembly';
@@ -26,6 +27,20 @@ export default function main(filePath: string, options: Options) {
             return false;
         }
         return true;
+    }
+    else if (options.target === 'inter') {
+        const parser = new Parser(code);
+        const ast = parser.parse();
+        if (ast === null) {
+            return false;
+        }
+        try {
+            bindProgram(ast);
+            return true;
+        }
+        catch (e) {
+            return false;
+        }
     }
 
 }
