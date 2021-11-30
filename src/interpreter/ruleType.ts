@@ -4,6 +4,7 @@ import {
     ImportDeclarationNode,
     FieldDeclarationNode,
     MethodDeclarationNode,
+    IdentifierNode,
 } from '../types/grammar';
 import {SymbolTable} from './symbolTable';
 
@@ -21,6 +22,8 @@ export interface Rule {
     ['FieldDeclaration:exit']?: (node: FieldDeclarationNode) => void;
     [SyntaxKind.MethodDeclaration]?: (node: MethodDeclarationNode) => void;
     ['MethodDeclaration:exit']?: (node: MethodDeclarationNode) => void;
+    [SyntaxKind.Identifier]?: (node: IdentifierNode) => void;
+    ['Identifier:exit']?: (node: IdentifierNode) => void;
 }
 
 type RuleFactory = (context: RuleContext) => Rule;

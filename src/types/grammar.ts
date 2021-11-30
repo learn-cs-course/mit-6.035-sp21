@@ -236,13 +236,14 @@ export const enum Type {
  * Ast Base Node
  */
 export interface BaseNode {
+    parent?: BaseNode;
     kind: SyntaxKind;
     pos: number;
     end: number;
-    parent?: BaseNode;
 }
 
 export interface ProgramNode extends BaseNode {
+    parent?: undefined;
     kind: SyntaxKind.Program;
     importDeclarations: ImportDeclarationNode[];
     fieldDeclarations: FieldDeclarationNode[];
@@ -256,17 +257,20 @@ export type DeclarationNode = ImportDeclarationNode
     | ParameterNode;
 
 export interface ImportDeclarationNode extends BaseNode {
+    parent?: ProgramNode;
     kind: SyntaxKind.ImportDeclaration;
     importName: IdentifierNode;
 }
 
 export interface FieldDeclarationNode extends BaseNode {
+    parent?: ProgramNode | BlockNode;
     kind: SyntaxKind.FieldDeclaration;
     type: SyntaxKind.IntKeyword | SyntaxKind.BoolKeyword;
     declarations: VariableDeclarationNode[];
 }
 
 export interface MethodDeclarationNode extends BaseNode {
+    parent?: ProgramNode;
     kind: SyntaxKind.MethodDeclaration;
     name: IdentifierNode;
     parameters: ParameterNode[];
@@ -277,6 +281,23 @@ export interface MethodDeclarationNode extends BaseNode {
 export type VariableDeclarationNode = IdentifierNode | ArrayDeclarationNode;
 
 export interface IdentifierNode extends BaseNode {
+    parent?: ImportDeclarationNode
+        | FieldDeclarationNode
+        | MethodDeclarationNode
+        | ArrayDeclarationNode
+        | ParameterNode
+        | AssignmentStatementNode
+        | IfStatementNode
+        | ForStatementNode
+        | WhileStatementNode
+        | ReturnStatementNode
+        | ForInitializerNode
+        | ForIncrementNode
+        | UnaryExpressionNode
+        | BinaryExpressionNode
+        | ParenthesizedExpressionNode
+        | ArrayLocationNode
+        | CallExpressionNode;
     kind: SyntaxKind.Identifier;
     name: string;
 }

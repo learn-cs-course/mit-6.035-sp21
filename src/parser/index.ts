@@ -11,7 +11,7 @@ import {
     ProgramNode,
     ImportDeclarationNode,
     FieldDeclarationNode,
-    DeclarationNode,
+    VariableDeclarationNode,
     MethodDeclarationNode,
     ParameterNode,
     BlockNode,
@@ -177,7 +177,7 @@ export class Parser {
         identifier: IdentifierNode,
         pos: number
     ): FieldDeclarationNode {
-        const declarations: DeclarationNode[] = [];
+        const declarations: VariableDeclarationNode[] = [];
 
         // 此时的 currentToken 是 identifier 的后一个 token
         // 因为 parseIdentifier 已经把 currentToken 指向下一个 token
@@ -209,7 +209,7 @@ export class Parser {
      * @param identifier
      * @returns
      */
-    private readDeclarationNode(identifier: IdentifierNode): DeclarationNode {
+    private readDeclarationNode(identifier: IdentifierNode): VariableDeclarationNode {
         const isArrayDeclaration = this.getCurrentToken() === SyntaxKind.OpenBracketToken;
         if (!isArrayDeclaration) {
             return identifier;

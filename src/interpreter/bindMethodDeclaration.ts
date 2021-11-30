@@ -9,6 +9,8 @@ export function bindMethodDeclaration(
 ): void {
     context.ruleRegistry.emit(methodDeclaration, 'enter');
 
+    methodDeclaration.name.parent = methodDeclaration;
+
     context.symbolTable.addSymbol({
         name: methodDeclaration.name.name,
         type: Type.Method,
