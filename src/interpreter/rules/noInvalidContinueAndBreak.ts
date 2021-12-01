@@ -3,7 +3,7 @@
  */
 
 import {RuleObject} from '../ruleType';
-import {ContinueStatementNode, BreakStatementNode, BaseNode, Type, SyntaxKind} from '../../types/grammar';
+import {ContinueStatementNode, BreakStatementNode, BaseNode, SyntaxKind} from '../../types/grammar';
 
 const rule: RuleObject = {
     name: 'noInvalidContinueAndBreak',
