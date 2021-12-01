@@ -10,6 +10,7 @@ import {
     IfStatementNode,
     ForStatementNode,
     ForInitializerNode,
+    ForIncrementNode,
     WhileStatementNode,
     ReturnStatementNode,
     ContinueStatementNode,
@@ -46,6 +47,8 @@ export interface Rule {
     ['ForStatement:exit']?: (node: ForStatementNode) => void;
     [SyntaxKind.ForInitializer]?: (node: ForInitializerNode) => void;
     ['ForInitializer:exit']?: (node: ForInitializerNode) => void;
+    [SyntaxKind.ForIncrement]?: (node: ForIncrementNode) => void;
+    ['ForIncrement:exit']?: (node: ForIncrementNode) => void;
     [SyntaxKind.WhileStatement]?: (node: WhileStatementNode) => void;
     ['WhileStatement:exit']?: (node: WhileStatementNode) => void;
     [SyntaxKind.ReturnStatement]?: (node: ReturnStatementNode) => void;

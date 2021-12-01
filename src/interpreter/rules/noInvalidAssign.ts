@@ -76,6 +76,15 @@ const rule: RuleObject = {
                 }
                 context.report('for initializer must be int');
             },
+            'ForIncrement:exit'(node) {
+                if (node.declaration.nodeType !== Type.Int) {
+                    context.report('for increment must be int');
+                    return;
+                }
+                if (node.expression && node.expression.nodeType !== Type.Int) {
+                    context.report('for increment must be int');
+                }
+            },
         };
     },
 };
