@@ -16,6 +16,7 @@ const rule: RuleObject = {
                 }
                 const radix = node.size.value.startsWith('0x') ? 16 : 10;
                 const value = parseInt(node.size.value, radix);
+                // 只检查大于0，不考虑超64位的情况
                 if (value > 0) {
                     return;
                 }

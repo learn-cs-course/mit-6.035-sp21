@@ -47,24 +47,19 @@ export function bindLeafNode(leafNode: LeafNode, context: BindContext): void {
         {
             leafNode.nodeType = Type.Int;
 
-            const radix = leafNode.value.startsWith('0x') ? 16 : 10;
-            const value = leafNode.value.toLowerCase();
+            const value = BigInt(leafNode.value);
             const parent = leafNode.parent!;
 
             if (parent.kind === SyntaxKind.UnaryExpression) {
                 if (parent.operator === SyntaxKind.MinusToken) {
-                    if (radix === 16 && value > '0x8000000000000000') {
-                        throw new Error('int literal underflow');
-                    }
-                    else if (radix === 10 && value > '9223372036854775808') {
+                    // -2^63
+                    if (value > BigInt('0x8000000000000000')) {
                         throw new Error('int literal underflow');
                     }
                 }
             }
-            else if (radix === 16 && value > '0x7fffffffffffffff') {
-                throw new Error('int literal overflow');
-            }
-            else if (radix === 10 && value > '9223372036854775807') {
+            // 2^63 - 1
+            else if (value > BigInt('0x7fffffffffffffff')) {
                 throw new Error('int literal overflow');
             }
 

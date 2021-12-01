@@ -12,6 +12,8 @@ import {
     ForInitializerNode,
     WhileStatementNode,
     ReturnStatementNode,
+    ContinueStatementNode,
+    BreakStatementNode,
     CallExpressionNode,
     ArrayLocationNode,
     IdentifierNode,
@@ -48,6 +50,10 @@ export interface Rule {
     ['WhileStatement:exit']?: (node: WhileStatementNode) => void;
     [SyntaxKind.ReturnStatement]?: (node: ReturnStatementNode) => void;
     ['ReturnStatement:exit']?: (node: ReturnStatementNode) => void;
+    [SyntaxKind.ContinueStatement]?: (node: ContinueStatementNode) => void;
+    ['ContinueStatement:exit']?: (node: ContinueStatementNode) => void;
+    [SyntaxKind.BreakStatement]?: (node: BreakStatementNode) => void;
+    ['BreakStatement:exit']?: (node: BreakStatementNode) => void;
     [SyntaxKind.CallExpression]?: (node: CallExpressionNode) => void;
     ['CallExpression:exit']?: (node: CallExpressionNode) => void;
     [SyntaxKind.ArrayLocation]?: (node: ArrayLocationNode) => void;

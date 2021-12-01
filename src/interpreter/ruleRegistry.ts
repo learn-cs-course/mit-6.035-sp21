@@ -14,6 +14,7 @@ import returnValueMissmatich from './rules/returnValueMissmatich';
 import noInvalidArrayIndex from './rules/noInvalidArrayIndex';
 import noInvalidAssign from './rules/noInvalidAssign';
 import noInvalidConditional from './rules/noInvalidConditional';
+import noInvalidContinueAndBreak from './rules/noInvalidContinueAndBreak';
 
 const registedRules: RuleObject[] = [
     noRedeclare,
@@ -25,6 +26,7 @@ const registedRules: RuleObject[] = [
     noInvalidArrayIndex,
     noInvalidAssign,
     noInvalidConditional,
+    noInvalidContinueAndBreak,
 ];
 
 export class RuleRegistry {
