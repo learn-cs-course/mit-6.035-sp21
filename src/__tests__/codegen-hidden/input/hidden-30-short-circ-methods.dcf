@@ -27,9 +27,4 @@ void main(){
   } else {
 	printf("Successful short circuit\n");
   }
-  if (justA() ? falseA() : trueA()){
-    printf("Successful short circuit\n");
-  } else {
-  	printf("Short circuiting did not work\n");
-  }
 }
