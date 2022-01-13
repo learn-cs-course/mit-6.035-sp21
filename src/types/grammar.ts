@@ -227,6 +227,11 @@ export const enum Type {
     Void,
 }
 
+export const enum IRCodeType {
+    enter,
+    return,
+}
+
 interface IdentifierSymbol {
     name: string;
     type: Type;
@@ -505,7 +510,8 @@ export type LiteralNode = IntLiteralNode
     | BoolLiteralNode;
 
 export interface IntLiteralNode extends BaseNode {
-    parent?: ExpressionNode;
+    parent?: ExpressionNode
+        | ArrayDeclarationNode;
     kind: SyntaxKind.IntLiteral;
     nodeType?: Type.Int;
     value: string;

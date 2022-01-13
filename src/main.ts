@@ -4,6 +4,7 @@ import {handleScan} from './handleScan';
 import {Scanner} from './scanner';
 import {Parser} from './parser';
 import {bindProgram} from './interpreter/bindProgram';
+import {genAssembly} from './asm';
 
 interface Options {
     target: 'scan' | 'parse' | 'inter' | 'assembly';
@@ -41,6 +42,20 @@ export default function main(filePath: string, options: Options) {
         catch (e) {
             return false;
         }
+    }
+    else if (options.target === 'assembly') {
+        const parser = new Parser(code);
+        const ast = parser.parse();
+        if (ast === null) {
+            return '';
+        }
+        try {
+            bindProgram(ast);
+        }
+        catch (e) {
+            return '';
+        }
+        return genAssembly(ast);
     }
 
 }
