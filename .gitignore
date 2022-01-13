@@ -105,3 +105,9 @@ dist
 
 # macOS Cache
 .DS_Store
+
+# 生成的汇编与二进制文件
+src/__tests__/codegen/input/*.o
+src/__tests__/codegen/input/*.s
+src/__tests__/codegen-hidden/input/*.o
+src/__tests__/codegen-hidden/input/*.s

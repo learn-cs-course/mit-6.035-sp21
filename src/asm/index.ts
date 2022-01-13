@@ -42,6 +42,7 @@ export function genAssembly(ast: ProgramNode) {
                     }
                     asm.push('    leave');
                     asm.push('    ret');
+                    asm.push('');
                     break;
                 }
             }
