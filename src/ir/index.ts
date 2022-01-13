@@ -9,6 +9,7 @@ import {
     IRCodeType,
     VariableDeclarationNode,
     MethodDeclarationNode,
+    LiteralNode,
 } from '../types/grammar';
 
 /**
@@ -17,22 +18,55 @@ import {
  */
 
 type IRPlainCode = EnterIRCode
-    | ReturnIRCode;
+    | ReturnIRCode
+    | CallIRCode
+    | ArgumentIRCode;
 
 interface EnterIRCode {
     type: IRCodeType.enter;
-}
-
-interface ReturnIRCode {
-    type: IRCodeType.return;
 }
 
 function createEnterIRCode(): EnterIRCode {
     return {type: IRCodeType.enter};
 }
 
+interface ReturnIRCode {
+    type: IRCodeType.return;
+}
+
 function createReturnIRCode(): ReturnIRCode {
     return {type: IRCodeType.return};
+}
+
+interface CallIRCode {
+    type: IRCodeType.call;
+    name: string;
+    length: number;
+}
+
+function createCallIRCode(name: string, length: number): CallIRCode {
+    return {
+        type: IRCodeType.call,
+        name,
+        length,
+    };
+}
+
+interface ArgumentIRCode {
+    type: IRCodeType.argument;
+    kind: SyntaxKind.Identifier | SyntaxKind.StringLiteral | LiteralNode;
+    value: string;
+}
+
+function createArgumentIRCode(
+    kind: SyntaxKind.Identifier | SyntaxKind.StringLiteral | LiteralNode,
+    value: string
+): ArgumentIRCode {
+    return {
+        type: IRCodeType.argument,
+        kind,
+        value,
+    };
 }
 
 interface FieldSymbol {
@@ -61,7 +95,7 @@ function createFieldSymbol(node: VariableDeclarationNode): FieldSymbol {
 
 export interface ProgramIR {
     globals: FieldSymbol[];
-    constants: string[];
+    constants: StringConstantsPool;
     methods: Method[];
     enbaleArrayBoundCheck: boolean;
     enableReturnTypeCheck: boolean;
@@ -93,17 +127,65 @@ function genMethodIR(
 
     // methodDeclaration.body.fields.forEach
 
-    // methodDeclaration.body.statements.forEach
+    methodDeclaration.body.statements.forEach(statement => {
+        switch (statement.kind) {
+            case SyntaxKind.CallStatement:
+            {
+                const {callee} = statement.expression;
+
+                statement.expression.arguments.forEach(argumentNode => {
+                    switch (argumentNode.kind) {
+                        case SyntaxKind.StringLiteral:
+                        {
+                            const label = programIR.constants.getLabel(argumentNode.value);
+                            methodSymbol.codes.push(
+                                createArgumentIRCode(SyntaxKind.StringLiteral, label)
+                            );
+                            break;
+                        }
+                    }
+                });
+
+                methodSymbol.codes.push(
+                    createCallIRCode(callee.name, statement.expression.arguments.length)
+                );
+
+                break;
+            }
+        }
+    });
 
     methodSymbol.codes.push(createReturnIRCode());
 
     return methodSymbol;
 }
 
+class StringConstantsPool {
+
+    private readonly map = new Map<string, number>();
+
+    getLabel(stringLiteral: string): string {
+        if (this.map.has(stringLiteral)) {
+            return `.msg${this.map.get(stringLiteral)}`;
+        }
+        this.map.set(stringLiteral, this.map.size);
+        return `.msg${this.map.size - 1}`;
+    }
+
+    get size() {
+        return this.map.size;
+    }
+
+    entries() {
+        return this.map.entries();
+    }
+
+}
+
 export function genIR(ast: ProgramNode) {
     const programIR: ProgramIR = {
         globals: [],
-        constants: [],
+        constants: new StringConstantsPool(),
         methods: [],
         enbaleArrayBoundCheck: false,
         enableReturnTypeCheck: false,

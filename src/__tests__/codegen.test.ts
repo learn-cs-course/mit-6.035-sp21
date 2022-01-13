@@ -16,7 +16,7 @@ const codegenTestOutputDir = path.resolve(__dirname, 'codegen/output');
 const codegenTestErrorDir = path.resolve(__dirname, 'codegen/error');
 const codegenTestLibPath = path.resolve(__dirname, 'codegen/lib');
 // const codegenInputCases = fs.readdirSync(codegenTestInputDir, 'utf-8');
-const codegenInputCases = ['00-empty.dcf'];
+const codegenInputCases = ['00-empty.dcf', '01-import.dcf'];
 
 describe('codegen basic cases', () => {
 
@@ -46,10 +46,21 @@ describe('codegen basic cases', () => {
                 expect(stdout).toBe(expectStdout);
             }
             catch (e) {
+                // 如果是 expect throw error，继续抛出去
+                if ((e as Error).hasOwnProperty('matcherResult')) {
+                    throw e;
+                }
+
                 // 包含运行时错误的情况，对比 exit code、stdout、stderr
                 const {status, stdout, stderr} = e as ExecSyncError;
 
                 const expectErrorStatusCodeFilePath = path.resolve(codegenTestErrorDir, `${filename}.err`);
+
+                // 如果是非运行时检查导致的错误情况，如汇编不合法导致的段错误，继续抛出去
+                if (!fs.existsSync(expectErrorStatusCodeFilePath)) {
+                    throw e;
+                }
+
                 const expectErrorStatusCodeString = fs.readFileSync(expectErrorStatusCodeFilePath, 'utf-8');
                 const expectErrorStatusCode = parseInt(expectErrorStatusCodeString.trim(), 10);
 

@@ -230,6 +230,8 @@ export const enum Type {
 export const enum IRCodeType {
     enter,
     return,
+    argument,
+    call
 }
 
 interface IdentifierSymbol {
