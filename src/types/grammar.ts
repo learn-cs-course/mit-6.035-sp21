@@ -231,7 +231,9 @@ export const enum IRCodeType {
     enter,
     return,
     argument,
-    call
+    call,
+    assign,
+    binary,
 }
 
 interface IdentifierSymbol {
@@ -463,25 +465,27 @@ export interface CallExpressionNode extends BaseNode {
 
 export type ArgumentNode = ExpressionNode | StringLiteralNode;
 
+export type BinaryOperator = SyntaxKind.PlusToken
+    | SyntaxKind.MinusToken
+    | SyntaxKind.AsteriskToken
+    | SyntaxKind.SlashToken
+    | SyntaxKind.PercentToken
+    | SyntaxKind.GreaterThanToken
+    | SyntaxKind.LessThanToken
+    | SyntaxKind.GreaterThanEqualsToken
+    | SyntaxKind.LessThanEqualsToken
+    | SyntaxKind.EqualsEqualsToken
+    | SyntaxKind.ExclamationEqualsToken
+    | SyntaxKind.AmpersandAmpersandToken
+    | SyntaxKind.BarBarToken;
+
 export interface BinaryExpressionNode extends BaseNode {
     parent?: ExpressionNode;
     kind: SyntaxKind.BinaryExpression;
     nodeType?: Type.Bool | Type.Int | Type.Void;
     left: ExpressionNode;
     right: ExpressionNode;
-    operator: SyntaxKind.PlusToken
-        | SyntaxKind.MinusToken
-        | SyntaxKind.AsteriskToken
-        | SyntaxKind.SlashToken
-        | SyntaxKind.PercentToken
-        | SyntaxKind.GreaterThanToken
-        | SyntaxKind.LessThanToken
-        | SyntaxKind.GreaterThanEqualsToken
-        | SyntaxKind.LessThanEqualsToken
-        | SyntaxKind.EqualsEqualsToken
-        | SyntaxKind.ExclamationEqualsToken
-        | SyntaxKind.AmpersandAmpersandToken
-        | SyntaxKind.BarBarToken;
+    operator: BinaryOperator;
 }
 
 export interface UnaryExpressionNode extends BaseNode {
