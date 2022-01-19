@@ -11,6 +11,7 @@ import {
     MethodDeclarationNode,
     ExpressionNode,
     BinaryOperator,
+    UnaryOperator,
     LiteralNode,
 } from '../types/grammar';
 import {SymbolTable} from './symbolTable';
@@ -217,7 +218,7 @@ function calcBinaryExpression(
         case SyntaxKind.PlusToken:
             return {type: ValueType.Imm, value: Number(leftValue + rightValue)};
         case SyntaxKind.MinusToken:
-            return {type: ValueType.Imm, value: Number(leftValue + rightValue)};
+            return {type: ValueType.Imm, value: Number(leftValue - rightValue)};
         case SyntaxKind.AsteriskToken:
             return {type: ValueType.Imm, value: Number(leftValue * rightValue)};
         case SyntaxKind.SlashToken:
@@ -240,6 +241,18 @@ function calcBinaryExpression(
             return {type: ValueType.Imm, value: Number(Boolean(leftValue && rightValue))};
         case SyntaxKind.BarBarToken:
             return {type: ValueType.Imm, value: Number(Boolean(leftValue || rightValue))};
+    }
+}
+
+function calcUnaryExpression(
+    operand: ImmValue,
+    operator: UnaryOperator
+): ImmValue {
+    switch (operator) {
+        case SyntaxKind.MinusToken:
+            return {type: ValueType.Imm, value: -operand.value};
+        case SyntaxKind.ExclamationToken:
+            return {type: ValueType.Imm, value: Number(Boolean(!operand.value))};
     }
 }
 
@@ -345,6 +358,16 @@ function genMethodIR(
                 methodSymbol.codes.push(createBinaryIRCode(operator, tmpValue, leftGen, rightGen));
 
                 return tmpValue;
+            }
+            case SyntaxKind.UnaryExpression:
+            {
+                const {operator, operand} = node;
+
+                const operandGen = genExpersionNode(operand);
+                if (operandGen.type === ValueType.Imm) {
+                    return calcUnaryExpression(operandGen, operator);
+                }
+                throw new Error('todo');
             }
             default:
                 throw new Error('unexpected');

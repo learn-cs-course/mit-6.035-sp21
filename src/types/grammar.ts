@@ -488,12 +488,15 @@ export interface BinaryExpressionNode extends BaseNode {
     operator: BinaryOperator;
 }
 
+
+export type UnaryOperator = SyntaxKind.MinusToken
+    | SyntaxKind.ExclamationToken;
+
 export interface UnaryExpressionNode extends BaseNode {
     parent?: ExpressionNode;
     kind: SyntaxKind.UnaryExpression;
     nodeType?: Type.Bool | Type.Int | Type.Void;
-    operator: SyntaxKind.MinusToken
-        | SyntaxKind.ExclamationToken;
+    operator: UnaryOperator;
     operand: ExpressionNode;
 }
 

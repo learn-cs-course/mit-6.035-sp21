@@ -16,7 +16,7 @@ const codegenTestOutputDir = path.resolve(__dirname, 'codegen/output');
 const codegenTestErrorDir = path.resolve(__dirname, 'codegen/error');
 const codegenTestLibPath = path.resolve(__dirname, 'codegen/lib');
 // const codegenInputCases = fs.readdirSync(codegenTestInputDir, 'utf-8');
-const codegenInputCases = ['00-empty.dcf', '01-import.dcf', '02-expr.dcf'];
+const codegenInputCases = ['00-empty.dcf', '01-import.dcf', '02-expr.dcf', '03-math.dcf'];
 
 describe('codegen basic cases', () => {
 
