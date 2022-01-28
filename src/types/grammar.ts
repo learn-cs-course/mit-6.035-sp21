@@ -234,6 +234,9 @@ export const enum IRCodeType {
     call,
     assign,
     binary,
+    label,
+    conditionalJump,
+    jump,
 }
 
 interface IdentifierSymbol {

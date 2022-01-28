@@ -9,6 +9,7 @@ import {
     IRCodeType,
     VariableDeclarationNode,
     MethodDeclarationNode,
+    BlockNode,
     ExpressionNode,
     BinaryOperator,
     UnaryOperator,
@@ -21,12 +22,25 @@ import {SymbolTable} from './symbolTable';
  * 但是好像必要性不是很大，先忍了
  */
 
+class JumpLabels {
+    private labelId = 0;
+
+    getLabel() {
+        return `.Label${this.labelId++}`;
+    }
+}
+
+const globalLabels = new JumpLabels();
+
 type IRPlainCode = EnterIRCode
     | ReturnIRCode
     | CallIRCode
     | ArgumentIRCode
     | AssignIRCode
-    | BinaryIRCode;
+    | BinaryIRCode
+    | LabelIRCode
+    | ConditionalJumpIRCode
+    | JumpIRCode;
 
 interface EnterIRCode {
     type: IRCodeType.enter;
@@ -182,6 +196,55 @@ function createBinaryIRCode(
     };
 }
 
+interface LabelIRCode {
+    type: IRCodeType.label;
+    label: string;
+}
+
+function createLabelIRCode(label: string): LabelIRCode {
+    return {
+        type: IRCodeType.label,
+        label,
+    };
+}
+
+interface ConditionalJumpIRCode {
+    type: IRCodeType.conditionalJump;
+    operator: BinaryOperator;
+    left: TmpValue | ImmValue | IdentifierValue;
+    right: TmpValue | ImmValue | IdentifierValue;
+    targetLabel: string;
+}
+
+function createConditionalJumpIRCode(
+    operator: BinaryOperator,
+    left: TmpValue | ImmValue | IdentifierValue,
+    right: TmpValue | ImmValue | IdentifierValue,
+    targetLabel: string
+): ConditionalJumpIRCode {
+    return {
+        type: IRCodeType.conditionalJump,
+        operator,
+        left,
+        right,
+        targetLabel,
+    };
+}
+
+interface JumpIRCode {
+    type: IRCodeType.jump;
+    targetLabel: string;
+}
+
+function createJumpIRCode(
+    targetLabel: string
+): JumpIRCode {
+    return {
+        type: IRCodeType.jump,
+        targetLabel,
+    };
+}
+
 interface FieldSymbol {
     name: string;
     size: number;
@@ -291,7 +354,7 @@ function genMethodIR(
         localSize: 0,
     };
 
-    function genExpersionNode(node: ExpressionNode): AssignmentIRCodeRigntValue {
+    function genExpersionNodeForRValue(node: ExpressionNode): AssignmentIRCodeRigntValue {
         switch (node.kind) {
             case SyntaxKind.IntLiteral:
             {
@@ -313,6 +376,7 @@ function genMethodIR(
 
                 switch (symbol.kind) {
                     case 'global':
+                        // @todo 我猜我是瞎写的
                         offset = 200;
                         break;
                     case 'local':
@@ -329,15 +393,15 @@ function genMethodIR(
             }
             case SyntaxKind.ParenthesizedExpression:
             {
-                return genExpersionNode(node.expression);
+                return genExpersionNodeForRValue(node.expression);
             }
             case SyntaxKind.BinaryExpression:
             {
                 const {left, right, operator} = node;
 
                 // @todo 应该不是所有的情况，都能走 gen expr 的，感觉 a[x] 会复杂一些
-                const leftGen = genExpersionNode(left);
-                const rightGen = genExpersionNode(right);
+                const leftGen = genExpersionNodeForRValue(left);
+                const rightGen = genExpersionNodeForRValue(right);
 
                 // 预先计算
                 if (leftGen.type === ValueType.Imm && rightGen.type === ValueType.Imm) {
@@ -355,6 +419,7 @@ function genMethodIR(
                     type: ValueType.Tmp,
                     name: symbolTable.addTmpVariable(),
                 } as const;
+
                 methodSymbol.codes.push(createBinaryIRCode(operator, tmpValue, leftGen, rightGen));
 
                 return tmpValue;
@@ -363,7 +428,7 @@ function genMethodIR(
             {
                 const {operator, operand} = node;
 
-                const operandGen = genExpersionNode(operand);
+                const operandGen = genExpersionNodeForRValue(operand);
                 if (operandGen.type === ValueType.Imm) {
                     return calcUnaryExpression(operandGen, operator);
                 }
@@ -373,80 +438,161 @@ function genMethodIR(
                 throw new Error('unexpected');
         }
     }
-    // methodDeclaration.parameters
 
-    methodSymbol.codes.push(createEnterIRCode());
-
-    methodDeclaration.body.fields.forEach(field => {
-        const type = field.type;
-        const typeSize = type === SyntaxKind.IntKeyword ? 8 : 1;
-        field.declarations.forEach(declaration => {
-            if (declaration.kind === SyntaxKind.Identifier) {
-                symbolTable.addLocal(declaration.name, typeSize);
-            }
-            else {
-                const name = declaration.name.name;
-                const length = declaration.size.value.startsWith('0x')
-                    ? parseInt(declaration.size.value, 16)
-                    : parseInt(declaration.size.value, 10);
-                symbolTable.addLocal(name, length * typeSize);
-            }
-        });
-    });
-
-    methodDeclaration.body.statements.forEach(statement => {
-        switch (statement.kind) {
-            case SyntaxKind.CallStatement:
+    function genExpersionNodeForJump(
+        node: ExpressionNode,
+        trueLabel: LabelIRCode,
+        falseLabel: LabelIRCode
+    ) {
+        switch (node.kind) {
+            case SyntaxKind.BinaryExpression:
             {
-                const {callee} = statement.expression;
-
-                statement.expression.arguments.forEach(argumentNode => {
-                    switch (argumentNode.kind) {
-                        case SyntaxKind.StringLiteral:
-                        {
-                            const label = programIR.constants.getLabel(argumentNode.value);
-                            methodSymbol.codes.push(
-                                createArgumentIRCode(SyntaxKind.StringLiteral, label)
-                            );
-                            break;
-                        }
-                        case SyntaxKind.Identifier:
-                        {
-                            const symbol = symbolTable.find(argumentNode.name)!;
-                            if (symbol.kind !== 'local') {
-                                throw new Error('unexpected');
-                            }
-                            methodSymbol.codes.push(
-                                createArgumentIRCode(SyntaxKind.Identifier, argumentNode.name, symbol.offset)
-                            );
-                            break;
-                        }
-                    }
-                });
-
-                methodSymbol.codes.push(
-                    createCallIRCode(callee.name, statement.expression.arguments.length)
-                );
-
-                break;
-            }
-            case SyntaxKind.AssignmentStatement:
-            {
-                const {left, right, operator} = statement;
-                switch (operator) {
-                    case SyntaxKind.EqualsToken:
+                // @todo 利用 fall 的性质，这里有大量的 label 可以合并
+                // 懒的优化了，先过 case，我感觉我要写不下去了
+                switch (node.operator) {
+                    case SyntaxKind.GreaterThanEqualsToken:
+                    case SyntaxKind.GreaterThanToken:
+                    case SyntaxKind.LessThanEqualsToken:
+                    case SyntaxKind.LessThanToken:
+                    case SyntaxKind.EqualsEqualsToken:
+                    case SyntaxKind.ExclamationEqualsToken:
                     {
-                        const assignIRCodeLeft = genExpersionNode(left);
-                        const assignIRCodeRight = genExpersionNode(right!);
-                        methodSymbol.codes.push(createAssignIRCode(assignIRCodeLeft, assignIRCodeRight));
-
+                        // 无论如何，就算子节点里面有控制流，到比较大小这一步，都需要的是 rvalue
+                        const left = genExpersionNodeForRValue(node.left);
+                        const right = genExpersionNodeForRValue(node.right);
+                        methodSymbol.codes.push(createConditionalJumpIRCode(
+                            node.operator,
+                            // @ts-expect-error
+                            left,
+                            right,
+                            trueLabel.label
+                        ));
+                        methodSymbol.codes.push(createJumpIRCode(falseLabel.label));
+                        break;
+                    }
+                    case SyntaxKind.BarBarToken:
+                    {
+                        const newFalseLabel = globalLabels.getLabel();
+                        const newFalseLabelIRCode = createLabelIRCode(newFalseLabel);
+                        genExpersionNodeForJump(node.left, trueLabel, newFalseLabelIRCode);
+                        methodSymbol.codes.push(newFalseLabelIRCode);
+                        genExpersionNodeForJump(node.right, trueLabel, falseLabel);
+                        break;
+                    }
+                    case SyntaxKind.AmpersandAmpersandToken:
+                    {
+                        const newTrueLabel = globalLabels.getLabel();
+                        const newTrueLabelIRCode = createLabelIRCode(newTrueLabel);
+                        genExpersionNodeForJump(node.left, newTrueLabelIRCode, falseLabel);
+                        methodSymbol.codes.push(newTrueLabelIRCode);
+                        genExpersionNodeForJump(node.right, trueLabel, falseLabel);
                         break;
                     }
                 }
                 break;
             }
+            default:
+                throw new Error('todo');
         }
-    });
+    }
+
+    // methodDeclaration.parameters
+
+    methodSymbol.codes.push(createEnterIRCode());
+
+    function genBlockNode(node: BlockNode) {
+        node.fields.forEach(field => {
+            const type = field.type;
+            const typeSize = type === SyntaxKind.IntKeyword ? 8 : 1;
+            field.declarations.forEach(declaration => {
+                if (declaration.kind === SyntaxKind.Identifier) {
+                    symbolTable.addLocal(declaration.name, typeSize);
+                }
+                else {
+                    const name = declaration.name.name;
+                    const length = declaration.size.value.startsWith('0x')
+                        ? parseInt(declaration.size.value, 16)
+                        : parseInt(declaration.size.value, 10);
+                    symbolTable.addLocal(name, length * typeSize);
+                }
+            });
+        });
+
+        node.statements.forEach(statement => {
+            switch (statement.kind) {
+                case SyntaxKind.CallStatement:
+                {
+                    const {callee} = statement.expression;
+
+                    statement.expression.arguments.forEach(argumentNode => {
+                        switch (argumentNode.kind) {
+                            case SyntaxKind.StringLiteral:
+                            {
+                                const label = programIR.constants.getLabel(argumentNode.value);
+                                methodSymbol.codes.push(
+                                    createArgumentIRCode(SyntaxKind.StringLiteral, label)
+                                );
+                                break;
+                            }
+                            case SyntaxKind.Identifier:
+                            {
+                                const symbol = symbolTable.find(argumentNode.name)!;
+                                if (symbol.kind !== 'local') {
+                                    throw new Error('unexpected');
+                                }
+                                methodSymbol.codes.push(
+                                    createArgumentIRCode(SyntaxKind.Identifier, argumentNode.name, symbol.offset)
+                                );
+                                break;
+                            }
+                        }
+                    });
+
+                    methodSymbol.codes.push(
+                        createCallIRCode(callee.name, statement.expression.arguments.length)
+                    );
+
+                    break;
+                }
+                case SyntaxKind.AssignmentStatement:
+                {
+                    const {left, right, operator} = statement;
+                    switch (operator) {
+                        case SyntaxKind.EqualsToken:
+                        {
+                            const assignIRCodeLeft = genExpersionNodeForRValue(left);
+                            const assignIRCodeRight = genExpersionNodeForRValue(right!);
+                            methodSymbol.codes.push(createAssignIRCode(assignIRCodeLeft, assignIRCodeRight));
+
+                            break;
+                        }
+                    }
+                    break;
+                }
+                case SyntaxKind.IfStatement:
+                {
+                    const {condition, thenBlock, elseBlock} = statement;
+                    const trueLabel = createLabelIRCode(globalLabels.getLabel());
+                    const falseLabel = createLabelIRCode(globalLabels.getLabel());
+                    const nextLabel = createLabelIRCode(globalLabels.getLabel());
+                    genExpersionNodeForJump(
+                        condition, trueLabel, falseLabel
+                    );
+                    methodSymbol.codes.push(trueLabel);
+                    genBlockNode(thenBlock);
+                    methodSymbol.codes.push(createJumpIRCode(nextLabel.label));
+                    methodSymbol.codes.push(falseLabel);
+                    if (elseBlock) {
+                        methodSymbol.codes.push(falseLabel);
+                        genBlockNode(elseBlock);
+                    }
+                    methodSymbol.codes.push(nextLabel);
+                }
+            }
+        });
+    }
+
+    genBlockNode(methodDeclaration.body);
 
     methodSymbol.codes.push(createReturnIRCode());
 
