@@ -21,6 +21,10 @@ class TmpSymbols {
     }
 
     getTmpRegister(name: string) {
+        if (name === 'returnValue') {
+            // @todo 我无所谓了，来吧
+            return '%rax' as unknown as '%r10';
+        }
         return this.tmpMap.get(name);
     }
 
@@ -108,9 +112,23 @@ export function genAssembly(ast: ProgramNode) {
                 }
                 case IRCodeType.return:
                 {
-                    if (method.name === 'main') {
-                        asm.push('    movq $0, %rax');
+                    if (!irCode.value) {
+                        break;
                     }
+                    if (irCode.value.type === ValueType.Imm) {
+                        asm.push(`    movq $${irCode.value.value}, %rax`);
+                    }
+                    if (irCode.value.type === ValueType.Tmp) {
+                        const register = tmpSymbols.getTmpRegister(irCode.value.name);
+                        asm.push(`    movq ${register}, %rax`);
+                    }
+                    if (irCode.value.type === ValueType.Identifier) {
+                        asm.push(`    movq ${irCode.value.offset}(%rbp), %rax`);
+                    }
+                    break;
+                }
+                case IRCodeType.exit:
+                {
                     asm.push('    leave');
                     asm.push('    ret');
                     asm.push('');
@@ -132,10 +150,26 @@ export function genAssembly(ast: ProgramNode) {
                         throw new Error('unexpected error: ir call position');
                     }
 
+                    if (callIRCode.length >= 6 && callIRCode.length % 2 !== 0) {
+                        asm.push('    subq $8, %rsp');
+                    }
+
                     while (stack.length > 0) {
                         const code = stack.pop()!;
                         if (stack.length >= 6) {
-                            // todo add params on stack
+                            if (code.kind === SyntaxKind.StringLiteral) {
+                                asm.push(`    pushq $${code.label}`);
+                            }
+                            else if (code.kind === SyntaxKind.Identifier) {
+                                asm.push(`    pushq ${code.offset}(%rbp)`);
+                            }
+                            else if (code.kind === SyntaxKind.IntLiteral) {
+                                asm.push(`    pushq $${code.value}`);
+                            }
+                            else if (code.kind === ValueType.Tmp) {
+                                const register = tmpSymbols.getTmpRegister(code.tmpName);
+                                asm.push(`    pushq ${register}`);
+                            }
                             continue;
                         }
                         const register = CALLING_CONVENTION_REGISTERS[stack.length];
@@ -144,6 +178,13 @@ export function genAssembly(ast: ProgramNode) {
                         }
                         else if (code.kind === SyntaxKind.Identifier) {
                             asm.push(`    movq ${code.offset}(%rbp), ${register}`);
+                        }
+                        else if (code.kind === SyntaxKind.IntLiteral) {
+                            asm.push(`    movq $${code.value}, ${register}`);
+                        }
+                        else if (code.kind === ValueType.Tmp) {
+                            const tmpRegister = tmpSymbols.getTmpRegister(code.tmpName);
+                            asm.push(`    movq ${tmpRegister}, ${register}`);
                         }
                         else {
                             // @todo
@@ -155,6 +196,15 @@ export function genAssembly(ast: ProgramNode) {
                 case IRCodeType.call:
                 {
                     asm.push(`    call ${irCode.name}`);
+                    if (irCode.length > 6) {
+                        const delta = irCode.length - 6;
+                        if (delta % 2 === 0) {
+                            asm.push(`    addq $${delta * 8}, %rsp`);
+                        }
+                        else {
+                            asm.push(`    addq $${(delta + 1) * 8}, %rsp`);
+                        }
+                    }
                     asm.push('');
                     break;
                 }
@@ -255,6 +305,32 @@ export function genAssembly(ast: ProgramNode) {
                                 tmpSymbols.replaceTmpName(irCode.right.name, irCode.result.name);
                                 break;
                             }
+                            if (
+                                irCode.left.type === ValueType.Parameter
+                                && irCode.right.type === ValueType.Parameter
+                            ) {
+                                const register = tmpSymbols.allocateTmp(irCode.result.name);
+                                const leftPos = irCode.left.index >= 6
+                                    ? `${(irCode.left.index - 4) * 8}(%rbp)`
+                                    : CALLING_CONVENTION_REGISTERS[irCode.left.index];
+                                const rightPos = irCode.right.index >= 6
+                                    ? `${(irCode.right.index - 4) * 8}(%rbp)`
+                                    : CALLING_CONVENTION_REGISTERS[irCode.right.index];
+                                asm.push(`    movq ${leftPos}, ${register}`);
+                                asm.push(`    addq ${rightPos}, ${register}`);
+                                break;
+                            }
+                            if (
+                                irCode.left.type === ValueType.Tmp
+                                && irCode.right.type === ValueType.Parameter
+                            ) {
+                                const register = tmpSymbols.getTmpRegister(irCode.left.name);
+                                const rightPos = irCode.right.index >= 6
+                                    ? `${(irCode.right.index - 4) * 8}(%rbp)`
+                                    : CALLING_CONVENTION_REGISTERS[irCode.right.index];
+                                asm.push(`    addq ${rightPos}, ${register}`);
+                                tmpSymbols.replaceTmpName(irCode.left.name, irCode.result.name);
+                            }
                             break;
                         }
                         // @todo 减法不符合交换律，我下面写的一定哪里有问题，但我不知道哪里，我好累现在
@@ -322,6 +398,21 @@ export function genAssembly(ast: ProgramNode) {
                                 const register = tmpSymbols.getTmpRegister(irCode.right.name);
                                 asm.push(`    subq ${irCode.left.offset}(%rbp), ${register}`);
                                 tmpSymbols.replaceTmpName(irCode.right.name, irCode.result.name);
+                                break;
+                            }
+                            if (
+                                irCode.left.type === ValueType.Parameter
+                                && irCode.right.type === ValueType.Parameter
+                            ) {
+                                const register = tmpSymbols.allocateTmp(irCode.result.name);
+                                const leftPos = irCode.left.index >= 6
+                                    ? `${(irCode.left.index - 4) * 8}(%rbp)`
+                                    : CALLING_CONVENTION_REGISTERS[irCode.left.index];
+                                const rightPos = irCode.right.index >= 6
+                                    ? `${(irCode.right.index - 4) * 8}(%rbp)`
+                                    : CALLING_CONVENTION_REGISTERS[irCode.right.index];
+                                asm.push(`    movq ${leftPos}, ${register}`);
+                                asm.push(`    subq ${rightPos}, ${register}`);
                                 break;
                             }
                             break;

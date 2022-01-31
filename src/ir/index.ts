@@ -13,7 +13,6 @@ import {
     ExpressionNode,
     BinaryOperator,
     UnaryOperator,
-    LiteralNode,
 } from '../types/grammar';
 import {SymbolTable} from './symbolTable';
 
@@ -34,6 +33,7 @@ const globalLabels = new JumpLabels();
 
 type IRPlainCode = EnterIRCode
     | ReturnIRCode
+    | ExitIRCode
     | CallIRCode
     | ArgumentIRCode
     | AssignIRCode
@@ -52,10 +52,22 @@ function createEnterIRCode(): EnterIRCode {
 
 interface ReturnIRCode {
     type: IRCodeType.return;
+    value?: ImmValue | TmpValue | IdentifierValue;
 }
 
-function createReturnIRCode(): ReturnIRCode {
-    return {type: IRCodeType.return};
+function createReturnIRCode(value?: ImmValue | TmpValue | IdentifierValue): ReturnIRCode {
+    return {
+        type: IRCodeType.return,
+        value,
+    };
+}
+
+interface ExitIRCode {
+    type: IRCodeType.exit;
+}
+
+function createExitIRCode(): ExitIRCode {
+    return {type: IRCodeType.exit};
 }
 
 interface CallIRCode {
@@ -70,6 +82,19 @@ function createCallIRCode(name: string, length: number): CallIRCode {
         name,
         length,
     };
+}
+
+export const enum ValueType {
+    // 立即数
+    Imm,
+    // 临时变量
+    Tmp,
+    // 标识符
+    Identifier,
+    // 数组元素
+    ArrayLocation,
+    // 函数参数
+    Parameter,
 }
 
 interface StringLiteralArgumentIRCode {
@@ -87,14 +112,21 @@ interface IdentifierArgumentIRCode {
 
 interface LiteralArgumentIRCode {
     type: IRCodeType.argument;
-    kind: LiteralNode;
+    kind: SyntaxKind.IntLiteral;
     value: string;
 }
 
-export type ArgumentIRCode = StringLiteralArgumentIRCode | IdentifierArgumentIRCode | LiteralArgumentIRCode;
+interface TmpArgumentIRCode {
+    type: IRCodeType.argument;
+    kind: ValueType.Tmp;
+    tmpName: string;
+}
+
+export type ArgumentIRCode = StringLiteralArgumentIRCode
+    | IdentifierArgumentIRCode | LiteralArgumentIRCode | TmpArgumentIRCode;
 
 function createArgumentIRCode(
-    kind: SyntaxKind.Identifier | SyntaxKind.StringLiteral | LiteralNode,
+    kind: SyntaxKind.Identifier | SyntaxKind.StringLiteral | SyntaxKind.IntLiteral | ValueType.Tmp,
     value: string,
     offset?: number
 ): ArgumentIRCode {
@@ -113,22 +145,18 @@ function createArgumentIRCode(
             label: value,
         };
     }
+    if (kind === ValueType.Tmp) {
+        return {
+            type: IRCodeType.argument,
+            kind,
+            tmpName: value,
+        };
+    }
     return {
         type: IRCodeType.argument,
         kind,
         value,
     };
-}
-
-export const enum ValueType {
-    // 立即数
-    Imm,
-    // 临时变量
-    Tmp,
-    // 标识符
-    Identifier,
-    // 数组元素
-    ArrayLocation,
 }
 
 interface ImmValue {
@@ -147,6 +175,12 @@ interface IdentifierValue {
     offset: number;
 }
 
+interface ParameterValue {
+    type: ValueType.Parameter;
+    name: string;
+    index: number;
+}
+
 interface ArrayLocationValue {
     type: ValueType.ArrayLocation;
     name: string;
@@ -154,7 +188,7 @@ interface ArrayLocationValue {
     offset: number;
 }
 
-type AssignmentIRCodeRigntValue = ImmValue | TmpValue | IdentifierValue | ArrayLocationValue;
+type AssignmentIRCodeRigntValue = ImmValue | TmpValue | IdentifierValue | ArrayLocationValue | ParameterValue;
 
 interface AssignIRCode {
     type: IRCodeType.assign;
@@ -177,15 +211,15 @@ interface BinaryIRCode {
     type: IRCodeType.binary;
     operator: BinaryOperator;
     result: TmpValue;
-    left: TmpValue | ImmValue | IdentifierValue;
-    right: TmpValue | ImmValue | IdentifierValue;
+    left: TmpValue | ImmValue | IdentifierValue | ParameterValue;
+    right: TmpValue | ImmValue | IdentifierValue | ParameterValue;
 }
 
 function createBinaryIRCode(
     operator: BinaryOperator,
     result: TmpValue,
-    left: TmpValue | ImmValue | IdentifierValue,
-    right: TmpValue | ImmValue | IdentifierValue
+    left: TmpValue | ImmValue | IdentifierValue | ParameterValue,
+    right: TmpValue | ImmValue | IdentifierValue | ParameterValue
 ): BinaryIRCode {
     return {
         type: IRCodeType.binary,
@@ -354,6 +388,8 @@ function genMethodIR(
         localSize: 0,
     };
 
+    const returnLabel = globalLabels.getLabel();
+
     function genExpersionNodeForRValue(node: ExpressionNode): AssignmentIRCodeRigntValue {
         switch (node.kind) {
             case SyntaxKind.IntLiteral:
@@ -382,6 +418,14 @@ function genMethodIR(
                     case 'local':
                         offset = symbol.offset;
                         break;
+                    case 'parameter':
+                    {
+                        return {
+                            type: ValueType.Parameter,
+                            name: node.name,
+                            index: symbol.index,
+                        };
+                    }
                     default:
                         throw new Error('unexpected');
                 }
@@ -433,6 +477,68 @@ function genMethodIR(
                     return calcUnaryExpression(operandGen, operator);
                 }
                 throw new Error('todo');
+            }
+            case SyntaxKind.CallExpression:
+            {
+                const {callee} = node;
+
+                const argumentBuffer: ArgumentIRCode[] = [];
+
+                node.arguments.forEach(argumentNode => {
+                    switch (argumentNode.kind) {
+                        case SyntaxKind.StringLiteral:
+                        {
+                            const label = programIR.constants.getLabel(argumentNode.value);
+                            argumentBuffer.push(
+                                createArgumentIRCode(SyntaxKind.StringLiteral, label)
+                            );
+                            break;
+                        }
+                        case SyntaxKind.IntLiteral:
+                        {
+
+                            argumentBuffer.push(
+                                createArgumentIRCode(SyntaxKind.IntLiteral, argumentNode.value)
+                            );
+                            break;
+                        }
+                        case SyntaxKind.Identifier:
+                        {
+                            const symbol = symbolTable.find(argumentNode.name)!;
+                            if (symbol.kind !== 'local') {
+                                throw new Error('unexpected');
+                            }
+                            argumentBuffer.push(
+                                createArgumentIRCode(SyntaxKind.Identifier, argumentNode.name, symbol.offset)
+                            );
+                            break;
+                        }
+                        case SyntaxKind.CallExpression:
+                        {
+                            const tmp = genExpersionNodeForRValue(argumentNode);
+                            argumentBuffer.push(
+                                // @ts-expect-error
+                                createArgumentIRCode(ValueType.Tmp, tmp.name)
+                            );
+                        }
+                    }
+                });
+
+                argumentBuffer.forEach(code => {
+                    methodSymbol.codes.push(code);
+                });
+
+                methodSymbol.codes.push(
+                    createCallIRCode(callee.name, node.arguments.length)
+                );
+
+                // 如果 call(1) + call(2) 就废了，我佛了，爱咋地咋滴吧
+                const tmpValue = {
+                    type: ValueType.Tmp,
+                    name: 'returnValue',
+                } as const;
+
+                return tmpValue;
             }
             default:
                 throw new Error('unexpected');
@@ -496,7 +602,9 @@ function genMethodIR(
         }
     }
 
-    // methodDeclaration.parameters
+    methodDeclaration.parameters.forEach((parameter, index) => {
+        symbolTable.addParameterSymbol(parameter.name.name, index);
+    });
 
     methodSymbol.codes.push(createEnterIRCode());
 
@@ -524,13 +632,23 @@ function genMethodIR(
                 {
                     const {callee} = statement.expression;
 
+                    const argumentBuffer: ArgumentIRCode[] = [];
+
                     statement.expression.arguments.forEach(argumentNode => {
                         switch (argumentNode.kind) {
                             case SyntaxKind.StringLiteral:
                             {
                                 const label = programIR.constants.getLabel(argumentNode.value);
-                                methodSymbol.codes.push(
+                                argumentBuffer.push(
                                     createArgumentIRCode(SyntaxKind.StringLiteral, label)
+                                );
+                                break;
+                            }
+                            case SyntaxKind.IntLiteral:
+                            {
+
+                                argumentBuffer.push(
+                                    createArgumentIRCode(SyntaxKind.IntLiteral, argumentNode.value)
                                 );
                                 break;
                             }
@@ -540,13 +658,26 @@ function genMethodIR(
                                 if (symbol.kind !== 'local') {
                                     throw new Error('unexpected');
                                 }
-                                methodSymbol.codes.push(
+                                argumentBuffer.push(
                                     createArgumentIRCode(SyntaxKind.Identifier, argumentNode.name, symbol.offset)
                                 );
                                 break;
                             }
+                            case SyntaxKind.CallExpression:
+                            {
+                                const tmp = genExpersionNodeForRValue(argumentNode);
+                                argumentBuffer.push(
+                                    // @ts-expect-error
+                                    createArgumentIRCode(ValueType.Tmp, tmp.name)
+                                );
+                            }
                         }
                     });
+
+                    argumentBuffer.forEach(code => {
+                        methodSymbol.codes.push(code);
+                    });
+
 
                     methodSymbol.codes.push(
                         createCallIRCode(callee.name, statement.expression.arguments.length)
@@ -587,6 +718,18 @@ function genMethodIR(
                         genBlockNode(elseBlock);
                     }
                     methodSymbol.codes.push(nextLabel);
+                    break;
+                }
+                case SyntaxKind.ReturnStatement:
+                {
+                    const {expression} = statement;
+                    if (expression) {
+                        const value = genExpersionNodeForRValue(expression);
+                        // @ts-expect-error 我没有处理 ArrayLocation
+                        methodSymbol.codes.push(createReturnIRCode(value));
+                    }
+                    methodSymbol.codes.push(createJumpIRCode(returnLabel));
+                    break;
                 }
             }
         });
@@ -594,7 +737,15 @@ function genMethodIR(
 
     genBlockNode(methodDeclaration.body);
 
-    methodSymbol.codes.push(createReturnIRCode());
+    if (methodSymbol.name === 'main') {
+        methodSymbol.codes.push(createReturnIRCode({
+            type: ValueType.Imm,
+            value: 0,
+        }));
+    }
+
+    methodSymbol.codes.push(createLabelIRCode(returnLabel));
+    methodSymbol.codes.push(createExitIRCode());
 
     methodSymbol.localSize = 0 - symbolTable.getCurrentOffset();
 

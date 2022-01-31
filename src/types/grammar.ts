@@ -230,6 +230,7 @@ export const enum Type {
 export const enum IRCodeType {
     enter,
     return,
+    exit,
     argument,
     call,
     assign,

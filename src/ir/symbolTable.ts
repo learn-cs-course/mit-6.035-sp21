@@ -10,6 +10,12 @@ interface LocalSymbol {
     offset: number;
 }
 
+interface ParameterSymbol {
+    kind: 'parameter';
+    name: string;
+    index: number;
+}
+
 interface GlobalSymbol {
     kind: 'global';
     name: string;
@@ -20,7 +26,7 @@ interface TmpSymbol {
     name: string;
 }
 
-type ScopeSymbol = GlobalSymbol | LocalSymbol | TmpSymbol;
+type ScopeSymbol = GlobalSymbol | LocalSymbol | TmpSymbol | ParameterSymbol;
 
 interface Scope {
     kind: 'global' | 'block';
@@ -121,5 +127,15 @@ export class SymbolTable {
         };
         scope.symbols.set(tmpSymbol.name, tmpSymbol);
         return name;
+    }
+
+    addParameterSymbol(name: string, index: number) {
+        const scope = this.stack[this.stack.length - 1];
+        const parameterSymbol: ParameterSymbol = {
+            kind: 'parameter',
+            name,
+            index,
+        };
+        scope.symbols.set(parameterSymbol.name, parameterSymbol);
     }
 }
