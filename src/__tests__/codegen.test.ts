@@ -23,6 +23,7 @@ const codegenInputCases = [
     '03-math.dcf',
     '04-math2.dcf',
     '05-calls.dcf',
+    '06-control-flow.dcf',
 ];
 
 describe('codegen basic cases', () => {

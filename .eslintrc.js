@@ -10,5 +10,6 @@ module.exports = {
         'max-statements': 'off',
         'max-lines': 'off',
         'no-constant-condition': 'off',
+        '@typescript-eslint/no-use-before-define': 'off',
     },
 };

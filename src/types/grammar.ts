@@ -390,15 +390,17 @@ export interface ForInitializerNode extends BaseNode {
     expression: ExpressionNode;
 }
 
+type ForIncrementOperator = SyntaxKind.PlusEqualsToken
+    | SyntaxKind.MinusEqualsToken
+    | SyntaxKind.PlusPlusToken
+    | SyntaxKind.MinusMinusToken;
+
 export interface ForIncrementNode extends BaseNode {
     parent?: ForStatementNode;
     kind: SyntaxKind.ForIncrement;
     nodeType?: Type.Void;
     declaration: LocationNode;
-    operator: SyntaxKind.PlusEqualsToken
-        | SyntaxKind.MinusEqualsToken
-        | SyntaxKind.PlusPlusToken
-        | SyntaxKind.MinusMinusToken;
+    operator: ForIncrementOperator;
     expression?: ExpressionNode;
 }
 

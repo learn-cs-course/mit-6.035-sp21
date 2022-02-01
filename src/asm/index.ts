@@ -636,6 +636,15 @@ export function genAssembly(ast: ProgramNode) {
                                 asm.push(`    cmpq ${irCode.right.offset}(%rbp), ${register}`);
                                 asm.push(`    jge ${irCode.targetLabel}`);
                             }
+                            if (
+                                irCode.left.type === ValueType.Imm
+                                && irCode.right.type === ValueType.Imm
+                            ) {
+                                const register = tmpSymbols.allocateTmp('');
+                                asm.push(`    movq $${irCode.left.value}, ${register}`);
+                                asm.push(`    cmpq $${irCode.right.value}, ${register}`);
+                                asm.push(`    jge ${irCode.targetLabel}`);
+                            }
                             break;
                         }
                         case SyntaxKind.GreaterThanToken:
@@ -647,6 +656,15 @@ export function genAssembly(ast: ProgramNode) {
                                 const register = tmpSymbols.allocateTmp(irCode.left.name);
                                 asm.push(`    movq ${irCode.left.offset}(%rbp), ${register}`);
                                 asm.push(`    cmpq ${irCode.right.offset}(%rbp), ${register}`);
+                                asm.push(`    jg ${irCode.targetLabel}`);
+                            }
+                            if (
+                                irCode.left.type === ValueType.Imm
+                                && irCode.right.type === ValueType.Imm
+                            ) {
+                                const register = tmpSymbols.allocateTmp('');
+                                asm.push(`    movq $${irCode.left.value}, ${register}`);
+                                asm.push(`    cmpq $${irCode.right.value}, ${register}`);
                                 asm.push(`    jg ${irCode.targetLabel}`);
                             }
                             break;
@@ -662,6 +680,15 @@ export function genAssembly(ast: ProgramNode) {
                                 asm.push(`    cmpq ${irCode.right.offset}(%rbp), ${register}`);
                                 asm.push(`    jle ${irCode.targetLabel}`);
                             }
+                            if (
+                                irCode.left.type === ValueType.Imm
+                                && irCode.right.type === ValueType.Imm
+                            ) {
+                                const register = tmpSymbols.allocateTmp('');
+                                asm.push(`    movq $${irCode.left.value}, ${register}`);
+                                asm.push(`    cmpq $${irCode.right.value}, ${register}`);
+                                asm.push(`    jle ${irCode.targetLabel}`);
+                            }
                             break;
                         }
                         case SyntaxKind.LessThanToken:
@@ -673,6 +700,15 @@ export function genAssembly(ast: ProgramNode) {
                                 const register = tmpSymbols.allocateTmp(irCode.left.name);
                                 asm.push(`    movq ${irCode.left.offset}(%rbp), ${register}`);
                                 asm.push(`    cmpq ${irCode.right.offset}(%rbp), ${register}`);
+                                asm.push(`    jl ${irCode.targetLabel}`);
+                            }
+                            if (
+                                irCode.left.type === ValueType.Imm
+                                && irCode.right.type === ValueType.Imm
+                            ) {
+                                const register = tmpSymbols.allocateTmp('');
+                                asm.push(`    movq $${irCode.left.value}, ${register}`);
+                                asm.push(`    cmpq $${irCode.right.value}, ${register}`);
                                 asm.push(`    jl ${irCode.targetLabel}`);
                             }
                             break;
@@ -688,6 +724,15 @@ export function genAssembly(ast: ProgramNode) {
                                 asm.push(`    cmpq ${irCode.right.offset}(%rbp), ${register}`);
                                 asm.push(`    je ${irCode.targetLabel}`);
                             }
+                            if (
+                                irCode.left.type === ValueType.Imm
+                                && irCode.right.type === ValueType.Imm
+                            ) {
+                                const register = tmpSymbols.allocateTmp('');
+                                asm.push(`    movq $${irCode.left.value}, ${register}`);
+                                asm.push(`    cmpq $${irCode.right.value}, ${register}`);
+                                asm.push(`    je ${irCode.targetLabel}`);
+                            }
                             break;
                         }
                         case SyntaxKind.ExclamationEqualsToken:
@@ -699,6 +744,15 @@ export function genAssembly(ast: ProgramNode) {
                                 const register = tmpSymbols.allocateTmp(irCode.left.name);
                                 asm.push(`    movq ${irCode.left.offset}(%rbp), ${register}`);
                                 asm.push(`    cmpq ${irCode.right.offset}(%rbp), ${register}`);
+                                asm.push(`    jne ${irCode.targetLabel}`);
+                            }
+                            if (
+                                irCode.left.type === ValueType.Imm
+                                && irCode.right.type === ValueType.Imm
+                            ) {
+                                const register = tmpSymbols.allocateTmp('');
+                                asm.push(`    movq $${irCode.left.value}, ${register}`);
+                                asm.push(`    cmpq $${irCode.right.value}, ${register}`);
                                 asm.push(`    jne ${irCode.targetLabel}`);
                             }
                             break;
