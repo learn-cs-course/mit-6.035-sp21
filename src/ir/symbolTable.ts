@@ -14,6 +14,7 @@ interface ParameterSymbol {
     kind: 'parameter';
     name: string;
     index: number;
+    offset: number;
 }
 
 interface GlobalSymbol {
@@ -129,13 +130,18 @@ export class SymbolTable {
         return name;
     }
 
-    addParameterSymbol(name: string, index: number) {
+    addParameterSymbol(name: string, index: number, size: number) {
         const scope = this.stack[this.stack.length - 1];
         const parameterSymbol: ParameterSymbol = {
             kind: 'parameter',
             name,
             index,
+            offset: index < 6 ? this.currentOffset - size : 0,
         };
+        if (index < 6) {
+            this.currentOffset = parameterSymbol.offset;
+        }
         scope.symbols.set(parameterSymbol.name, parameterSymbol);
+        return parameterSymbol.offset;
     }
 }

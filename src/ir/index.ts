@@ -247,15 +247,15 @@ function createLabelIRCode(label: string): LabelIRCode {
 interface ConditionalJumpIRCode {
     type: IRCodeType.conditionalJump;
     operator: BinaryOperator;
-    left: TmpValue | ImmValue | IdentifierValue;
-    right: TmpValue | ImmValue | IdentifierValue;
+    left: TmpValue | ImmValue | IdentifierValue | ParameterValue;
+    right: TmpValue | ImmValue | IdentifierValue | ParameterValue;
     targetLabel: string;
 }
 
 function createConditionalJumpIRCode(
     operator: BinaryOperator,
-    left: TmpValue | ImmValue | IdentifierValue,
-    right: TmpValue | ImmValue | IdentifierValue,
+    left: TmpValue | ImmValue | IdentifierValue | ParameterValue,
+    right: TmpValue | ImmValue | IdentifierValue | ParameterValue,
     targetLabel: string
 ): ConditionalJumpIRCode {
     return {
@@ -363,9 +363,14 @@ export interface ProgramIR {
     enableReturnTypeCheck: boolean;
 }
 
+interface ParameterInMethod {
+    size: number;
+    offset: number;
+}
+
 interface Method {
     name: string;
-    symbols: FieldSymbol[];
+    parameters: Map<string, ParameterInMethod>;
     codes: IRPlainCode[];
     localSize: number;
 }
@@ -385,7 +390,7 @@ function genMethodIR(
 
     const methodSymbol: Method = {
         name: methodDeclaration.name.name,
-        symbols: [],
+        parameters: new Map<string, ParameterInMethod>(),
         codes: [],
         localSize: 0,
     };
@@ -522,6 +527,16 @@ function genMethodIR(
                                 // @ts-expect-error
                                 createArgumentIRCode(ValueType.Tmp, tmp.name)
                             );
+                            break;
+                        }
+                        case SyntaxKind.BinaryExpression:
+                        {
+                            const tmp = genExpersionNodeForRValue(argumentNode);
+                            argumentBuffer.push(
+                                // @ts-expect-error
+                                createArgumentIRCode(ValueType.Tmp, tmp.name)
+                            );
+                            break;
                         }
                     }
                 });
@@ -605,7 +620,14 @@ function genMethodIR(
     }
 
     methodDeclaration.parameters.forEach((parameter, index) => {
-        symbolTable.addParameterSymbol(parameter.name.name, index);
+        const size = parameter.type === SyntaxKind.IntKeyword ? 8 : 1;
+        const offset = symbolTable.addParameterSymbol(parameter.name.name, index, size);
+        if (index < 6) {
+            methodSymbol.parameters.set(parameter.name.name, {
+                size,
+                offset,
+            });
+        }
     });
 
     methodSymbol.codes.push(createEnterIRCode());
