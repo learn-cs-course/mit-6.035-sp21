@@ -6,6 +6,7 @@
 interface LocalSymbol {
     kind: 'local';
     name: string;
+    typeSize: number;
     size: number;
     offset: number;
 }
@@ -20,6 +21,8 @@ interface ParameterSymbol {
 interface GlobalSymbol {
     kind: 'global';
     name: string;
+    typeSize: number;
+    size: number;
 }
 
 interface TmpSymbol {
@@ -84,11 +87,13 @@ export class SymbolTable {
         return undefined;
     }
 
-    addGlobal(name: string) {
+    addGlobal(name: string, typeSize: number, size: number) {
         const scope = this.stack[this.stack.length - 1];
         scope.symbols.set(name, {
             kind: 'global',
             name,
+            typeSize,
+            size,
         });
     }
 
@@ -97,13 +102,15 @@ export class SymbolTable {
      * 由于需要计算 offset，因此需要知道变量占用多少 byte
      *
      * @param symbol
+     * @param typeSize
      * @param size
      */
-    addLocal(name: string, size: number) {
+    addLocal(name: string, typeSize: number, size: number) {
         const scope = this.stack[this.stack.length - 1];
         const localSymbol: LocalSymbol = {
             kind: 'local',
             name,
+            typeSize,
             size,
             offset: this.currentOffset - size,
         };

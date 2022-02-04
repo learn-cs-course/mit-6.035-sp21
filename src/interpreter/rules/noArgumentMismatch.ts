@@ -10,6 +10,21 @@ const rule: RuleObject = {
     create(context) {
         return {
             'CallExpression:exit'(node) {
+                if (node.callee.name === 'len') {
+                    const calleeArguments = node.arguments;
+                    if (calleeArguments.length !== 1) {
+                        context.report('len should have only one argument.');
+                        return;
+                    }
+                    if (
+                        calleeArguments[0].nodeType === Type.BoolArray
+                        || calleeArguments[0].nodeType === Type.IntArray
+                    ) {
+                        return;
+                    }
+                    context.report('len should be applied to array.');
+                    return;
+                }
                 const identifierSymbol = context.symbolTable.find(node.callee.name);
                 if (identifierSymbol === undefined || identifierSymbol.type !== Type.Method) {
                     context.report('callee should be a method');

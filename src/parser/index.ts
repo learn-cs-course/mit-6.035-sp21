@@ -881,6 +881,24 @@ export class Parser {
                 }
                 return identifier;
             }
+            case SyntaxKind.LenKeyword:
+            {
+                const pos = this.scanner.getTokenPos();
+                const name = 'len';
+                this.nextToken();
+
+                const identifierNode = {
+                    kind: SyntaxKind.Identifier,
+                    name,
+                    pos,
+                    end: this.scanner.getTextPos() - 1,
+                } as const;
+
+                if (this.getCurrentToken() === SyntaxKind.OpenParenToken) {
+                    return this.parseCallExpression(identifierNode);
+                }
+                throw new Error(`Unexpected token ${this.getCurrentToken()}`);
+            }
             default:
             {
                 throw new Error(`Unexpected token ${this.getCurrentToken()}`);
@@ -898,6 +916,23 @@ export class Parser {
         this.expect(SyntaxKind.OpenParenToken);
         const parsedArguments = this.parseArguments();
         this.expect(SyntaxKind.CloseParenToken);
+
+        if (callee.name === 'len') {
+            if (parsedArguments.length !== 1) {
+                throw new Error('unexpected len argument length');
+            }
+            const argumentNode = parsedArguments[0];
+            switch (argumentNode.kind) {
+                case SyntaxKind.StringLiteral:
+                case SyntaxKind.CharLiteral:
+                case SyntaxKind.TrueKeyword:
+                case SyntaxKind.FalseKeyword:
+                case SyntaxKind.IntLiteral:
+                    throw new Error('len cannot be applied to literals');
+                default:
+            }
+        }
+
         return {
             kind: SyntaxKind.CallExpression,
             callee,

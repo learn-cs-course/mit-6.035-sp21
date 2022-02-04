@@ -20,7 +20,7 @@ const rule: RuleObject = {
                     default:
                     {
                         const symbol = context.symbolTable.find(node.name);
-                        if (symbol) {
+                        if (symbol || node.name === 'len') {
                             return;
                         }
                         context.report('identifier used before being declared');

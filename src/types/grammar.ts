@@ -238,6 +238,7 @@ export const enum IRCodeType {
     label,
     conditionalJump,
     jump,
+    arrayLocation,
 }
 
 interface IdentifierSymbol {

@@ -22,11 +22,22 @@ export function bindCallExpression(expression: CallExpressionNode, context: Bind
         }
     });
 
-    if (expression.callee.nodeType !== Type.Method) {
+    if (
+        expression.callee.nodeType !== Type.Method
+        && expression.callee.name !== 'len'
+    ) {
         throw new Error(`${expression.callee.name} is not a method`);
     }
 
-    const declaration = context.symbolTable.find(expression.callee.name)!.declaration;
+    const symbol = context.symbolTable.find(expression.callee.name);
+    if (!symbol) {
+        if (expression.callee.name === 'len') {
+            expression.nodeType = Type.Int;
+        }
+        context.ruleRegistry.emit(expression, 'exit');
+        return;
+    }
+    const declaration = symbol.declaration;
     if (declaration.kind === SyntaxKind.MethodDeclaration) {
         expression.nodeType = (() => {
             const returnType = declaration.returnType;

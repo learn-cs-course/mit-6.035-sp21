@@ -59,7 +59,6 @@ class TmpSymbols {
     }
 }
 
-
 const CALLING_CONVENTION_REGISTERS = [
     '%rdi',
     '%rsi',
@@ -214,27 +213,71 @@ export function genAssembly(ast: ProgramNode) {
                 }
                 case IRCodeType.assign:
                 {
-                    if (irCode.left.type !== ValueType.Identifier) {
-                        throw new Error('un');
+                    if (irCode.left.type === ValueType.Identifier) {
+                        switch (irCode.right.type) {
+                            case ValueType.Imm:
+                            {
+                                asm.push(`    movq $${irCode.right.value}, ${irCode.left.offset}(%rbp)`);
+                                break;
+                            }
+                            case ValueType.Tmp:
+                            {
+                                const register = tmpSymbols.getTmpRegister(irCode.right.name);
+                                asm.push(`    movq ${register}, ${irCode.left.offset}(%rbp)`);
+                                break;
+                            }
+                            case ValueType.Identifier:
+                            {
+                                const register = tmpSymbols.allocateTmp(irCode.right.name);
+                                asm.push(`    movq ${irCode.right.offset}(%rbp), ${register}`);
+                                asm.push(`    movq ${register}, ${irCode.left.offset}(%rbp)`);
+                                break;
+                            }
+                        }
                     }
-                    switch (irCode.right.type) {
-                        case ValueType.Imm:
-                        {
-                            asm.push(`    movq $${irCode.right.value}, ${irCode.left.offset}(%rbp)`);
-                            break;
-                        }
-                        case ValueType.Tmp:
-                        {
-                            const register = tmpSymbols.getTmpRegister(irCode.right.name);
-                            asm.push(`    movq ${register}, ${irCode.left.offset}(%rbp)`);
-                            break;
-                        }
-                        case ValueType.Identifier:
-                        {
-                            const register = tmpSymbols.allocateTmp(irCode.right.name);
-                            asm.push(`    movq ${irCode.right.offset}(%rbp), ${register}`);
-                            asm.push(`    movq ${register}, ${irCode.left.offset}(%rbp)`);
-                            break;
+                    else if (irCode.left.type === ValueType.ArrayLocation) {
+                        const offset = irCode.left.offset;
+                        const indexPos = (() => {
+                            switch (irCode.left.index.type) {
+                                case ValueType.Imm:
+                                    throw new Error('todo');
+                                case ValueType.Tmp:
+                                {
+                                    return tmpSymbols.getTmpRegister(irCode.left.index.name);
+                                }
+                                case ValueType.Identifier:
+                                {
+                                    // @todo 用 r14 存 index
+                                    const register = '%r14';
+                                    asm.push(`    movq ${irCode.left.index.offset}(%rbp), ${register}`);
+                                    return register;
+                                }
+                                case ValueType.Parameter:
+                                    throw new Error('todo');
+                            }
+                        })();
+                        const pos = offset === 200
+                            ? `${irCode.left.name}(,${indexPos}, ${irCode.left.typeSize})`
+                            : 'todo';
+                        switch (irCode.right.type) {
+                            case ValueType.Imm:
+                            {
+                                asm.push(`    movq $${irCode.right.value}, ${pos}`);
+                                break;
+                            }
+                            case ValueType.Tmp:
+                            {
+                                const register = tmpSymbols.getTmpRegister(irCode.right.name);
+                                asm.push(`    movq ${register}, ${pos}`);
+                                break;
+                            }
+                            case ValueType.Identifier:
+                            {
+                                const register = tmpSymbols.allocateTmp(irCode.right.name);
+                                asm.push(`    movq ${irCode.right.offset}(%rbp), ${register}`);
+                                asm.push(`    movq ${register}, ${pos}`);
+                                break;
+                            }
                         }
                     }
                     asm.push('');
@@ -379,10 +422,9 @@ export function genAssembly(ast: ProgramNode) {
                                 irCode.left.type === ValueType.Imm
                                 && irCode.right.type === ValueType.Identifier
                             ) {
-                                // @todo 减法没有交换律，这里有问题
                                 const register = tmpSymbols.allocateTmp(irCode.result.name);
-                                asm.push(`    movq ${irCode.right.offset}(%rbp), ${register}`);
-                                asm.push(`    subq $${irCode.left.value}, ${register}`);
+                                asm.push(`    movq $${irCode.left.value}, ${register}`);
+                                asm.push(`    subq ${irCode.right.offset}(%rbp), ${register}`);
                                 break;
                             }
                             if (
@@ -674,8 +716,6 @@ export function genAssembly(ast: ProgramNode) {
                                 irCode.left.type === ValueType.Identifier
                                 && irCode.right.type === ValueType.Imm
                             ) {
-
-
                                 const register = tmpSymbols.allocateTmp(irCode.result.name);
                                 asm.push(`    movq ${irCode.left.offset}(%rbp), %rax`);
                                 asm.push(`    movq $${irCode.right.value}, ${register}`);
@@ -736,6 +776,14 @@ export function genAssembly(ast: ProgramNode) {
                         const register = tmpSymbols.allocateTmp(irCode.left.name);
                         asm.push(`    movq ${irCode.left.offset}(%rbp), ${register}`);
                         asm.push(`    cmpq ${irCode.right.offset}(%rbp), ${register}`);
+                    }
+                    if (
+                        irCode.left.type === ValueType.Identifier
+                        && irCode.right.type === ValueType.Imm
+                    ) {
+                        const register = tmpSymbols.allocateTmp(irCode.left.name);
+                        asm.push(`    movq ${irCode.left.offset}(%rbp), ${register}`);
+                        asm.push(`    cmpq $${irCode.right.value}, ${register}`);
                     }
                     if (
                         irCode.left.type === ValueType.Imm
@@ -814,9 +862,45 @@ export function genAssembly(ast: ProgramNode) {
                         }
                     }
                     asm.push('');
+                    break;
+                }
+                case IRCodeType.arrayLocation:
+                {
+                    const {location, result} = irCode;
+                    const register = tmpSymbols.allocateTmp(result.name);
+                    const offset = location.offset;
+                    const indexPos = (() => {
+                        switch (location.index.type) {
+                            case ValueType.Imm:
+                                throw new Error('todo');
+                            case ValueType.Tmp:
+                            {
+                                return tmpSymbols.getTmpRegister(location.index.name);
+                            }
+                            case ValueType.Identifier:
+                            {
+                                // @todo 用 r14 存 index
+                                const register = '%r14';
+                                asm.push(`    movq ${location.index.offset}(%rbp), ${register}`);
+                                return register;
+                            }
+                            case ValueType.Parameter:
+                                throw new Error('todo');
+                        }
+                    })();
+                    const pos = offset === 200
+                        ? `${location.name}(,${indexPos}, ${location.typeSize})`
+                        : 'todo';
+                    asm.push(`    movq ${pos}, ${register}`);
+                    asm.push('');
+                    break;
                 }
             }
         }
+    });
+
+    ir.globals.forEach(item => {
+        asm.push(`.comm ${item.name}, 8, ${item.size}`);
     });
 
     return asm.join('\n');
