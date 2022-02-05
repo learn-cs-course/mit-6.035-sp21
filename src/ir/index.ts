@@ -189,6 +189,9 @@ interface ArrayLocationValue {
     name: string;
     index: ImmValue | TmpValue | IdentifierValue | ParameterValue;
     typeSize: number;
+    length: number;
+    methodName: string;
+    methodNameLength: number;
     offset: number;
 }
 
@@ -647,11 +650,16 @@ export function genIR(ast: ProgramNode) {
                     if (symbol.kind !== 'global' && symbol.kind !== 'local') {
                         throw new Error('unexpected');
                     }
+                    programIR.enbaleArrayBoundCheck = true;
+                    const label = programIR.constants.getLabel(`"${methodSymbol.name}"`);
                     const location: ArrayLocationValue = {
                         type: ValueType.ArrayLocation,
                         name: name.name,
                         index: indexRValue,
                         typeSize: symbol.typeSize,
+                        length: Math.floor(symbol.size / symbol.typeSize),
+                        methodName: label,
+                        methodNameLength: methodSymbol.name.length,
                         offset: symbol.kind === 'global' ? 200 : symbol.offset,
                     };
                     const tmpValue = {
@@ -758,7 +766,6 @@ export function genIR(ast: ProgramNode) {
                             }
                             case SyntaxKind.IntLiteral:
                             {
-
                                 argumentBuffer.push(
                                     createArgumentIRCode(SyntaxKind.IntLiteral, argumentNode.value)
                                 );
@@ -881,11 +888,16 @@ export function genIR(ast: ProgramNode) {
                                     if (symbol.kind !== 'global' && symbol.kind !== 'local') {
                                         throw new Error('unexpected');
                                     }
+                                    const label = programIR.constants.getLabel(`"${methodSymbol.name}"`);
+                                    programIR.enbaleArrayBoundCheck = true;
                                     assignIRCodeLeft = {
                                         type: ValueType.ArrayLocation,
                                         name: name.name,
                                         index: indexRValue,
                                         typeSize: symbol.typeSize,
+                                        length: Math.floor(symbol.size / symbol.typeSize),
+                                        methodName: label,
+                                        methodNameLength: methodSymbol.name.length,
                                         offset: symbol.kind === 'global' ? 200 : symbol.offset,
                                     };
                                     break;

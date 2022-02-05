@@ -27,6 +27,7 @@ const codegenInputCases: string[] = [
     '07-recursion.dcf',
     '08-array.dcf',
     '09-global.dcf',
+    '10-bounds.dcf',
 ];
 
 describe('codegen basic cases', () => {
@@ -76,7 +77,7 @@ describe('codegen basic cases', () => {
                 const expectErrorStatusCode = parseInt(expectErrorStatusCodeString.trim(), 10);
 
                 expect(status).toBe(expectErrorStatusCode);
-                expect(`${stdout}\n${stderr}`).toBe(expectStdout);
+                expect(`${stdout}${stderr}`).toBe(expectStdout);
             }
         });
     });

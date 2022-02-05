@@ -89,6 +89,14 @@ export function genAssembly(ast: ProgramNode) {
         asm.push('');
     }
 
+    if (ir.enbaleArrayBoundCheck) {
+        asm.push('.err_array_check_start:');
+        asm.push('    .string "*** RUNTIME ERROR ***: Array out of Bounds access in method \\""');
+        asm.push('.err_array_check_end:');
+        asm.push('    .string "\\"\\n"');
+        asm.push('');
+    }
+
     asm.push('.section .text');
 
     if (ir.globals.length > 0) {
@@ -247,7 +255,12 @@ export function genAssembly(ast: ProgramNode) {
                         const indexPos = (() => {
                             switch (irCode.left.index.type) {
                                 case ValueType.Imm:
-                                    throw new Error('todo');
+                                {
+                                    // @todo 用 r14 存 index
+                                    const register = '%r13';
+                                    asm.push(`    movq $${irCode.left.index.value}, ${register}`);
+                                    return register;
+                                }
                                 case ValueType.Tmp:
                                 {
                                     return tmpSymbols.getTmpRegister(irCode.left.index.name);
@@ -255,7 +268,7 @@ export function genAssembly(ast: ProgramNode) {
                                 case ValueType.Identifier:
                                 {
                                     // @todo 用 r14 存 index
-                                    const register = '%r14';
+                                    const register = '%r13';
                                     asm.push(`    movq  ${getIdentifierValue(irCode.left.index)}, ${register}`);
                                     return register;
                                 }
@@ -266,6 +279,14 @@ export function genAssembly(ast: ProgramNode) {
                         const pos = offset === 200
                             ? `${irCode.left.name}(,${indexPos}, ${irCode.left.typeSize})`
                             : 'todo';
+
+                        asm.push(`    movl $${irCode.left.methodNameLength}, %r14d`);
+                        asm.push(`    movl $${irCode.left.methodName}, %r15d`);
+                        asm.push(`    cmpq $0, ${indexPos}`);
+                        asm.push('    jl .exit_array_check');
+                        asm.push(`    cmpq $${irCode.left.length}, ${indexPos}`);
+                        asm.push('    jge .exit_array_check');
+
                         switch (irCode.right.type) {
                             case ValueType.Imm:
                             {
@@ -879,7 +900,12 @@ export function genAssembly(ast: ProgramNode) {
                     const indexPos = (() => {
                         switch (location.index.type) {
                             case ValueType.Imm:
-                                throw new Error('todo');
+                            {
+                                // @todo 用 r14 存 index
+                                const register = '%r13';
+                                asm.push(`    movq $${location.index.value}, ${register}`);
+                                return register;
+                            }
                             case ValueType.Tmp:
                             {
                                 return tmpSymbols.getTmpRegister(location.index.name);
@@ -887,7 +913,7 @@ export function genAssembly(ast: ProgramNode) {
                             case ValueType.Identifier:
                             {
                                 // @todo 用 r14 存 index
-                                const register = '%r14';
+                                const register = '%r13';
                                 asm.push(`    movq ${getIdentifierValue(location.index)}, ${register}`);
                                 return register;
                             }
@@ -895,6 +921,14 @@ export function genAssembly(ast: ProgramNode) {
                                 throw new Error('todo');
                         }
                     })();
+
+                    asm.push(`    movl $${location.methodNameLength}, %r14d`);
+                    asm.push(`    movl $${location.methodName}, %r15d`);
+                    asm.push(`    cmpq $0, ${indexPos}`);
+                    asm.push('    jl .exit_array_check');
+                    asm.push(`    cmpq $${location.length}, ${indexPos}`);
+                    asm.push('    jge .exit_array_check');
+
                     const pos = offset === 200
                         ? `${location.name}(,${indexPos}, ${location.typeSize})`
                         : 'todo';
@@ -905,6 +939,40 @@ export function genAssembly(ast: ProgramNode) {
             }
         }
     });
+
+    if (ir.enbaleArrayBoundCheck) {
+        asm.push('.exit_array_check:');
+        asm.push('    movl $61, %edx');
+        asm.push('    movl $.err_array_check_start, %ecx');
+        asm.push('    movl $2, %ebx');
+        asm.push('    movl $4, %eax');
+        asm.push('    int $0x80');
+        asm.push('');
+        asm.push('    movl %r14d, %edx');
+        asm.push('    movl %r15d, %ecx');
+        asm.push('    movl $2, %ebx');
+        asm.push('    movl $4, %eax');
+        asm.push('    int $0x80');
+        asm.push('');
+        asm.push('    movl $2, %edx');
+        asm.push('    movl $.err_array_check_end, %ecx');
+        asm.push('    movl $2, %ebx');
+        asm.push('    movl $4, %eax');
+        asm.push('    int $0x80');
+        asm.push('');
+        // 我本来想的是用下面的代码代替 exit(-1)，但是不行
+        // 因为 printf 在重定向的时候，会全缓冲，不会实际 write 到 stdout
+        // http://seanchense.github.io/2018/10/05/cache-policy-behind-printf-stdout/
+        // 所以 nodejs execSync 调用的时候拿不到 stdout
+        // asm.push('    movl $-1, %ebx');
+        // asm.push('    movl $1, %eax');
+        // asm.push('    int $0x80');
+        // 所以我不掘强了，还是选择依赖 lib 里面的 exit 吧
+        // exit 在调用过程中，会调用 fflush，将缓冲写入 stdout
+        asm.push('    movq $-1, %rdi');
+        asm.push('    call exit');
+        asm.push('');
+    }
 
     ir.globals.forEach(item => {
         asm.push(`.comm ${item.name}, 8, ${item.size}`);
