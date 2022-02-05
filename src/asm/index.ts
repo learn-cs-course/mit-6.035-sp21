@@ -903,5 +903,7 @@ export function genAssembly(ast: ProgramNode) {
         asm.push(`.comm ${item.name}, 8, ${item.size}`);
     });
 
+    asm.push('');
+
     return asm.join('\n');
 }

@@ -814,7 +814,7 @@ export function genIR(ast: ProgramNode) {
                 }
                 case SyntaxKind.AssignmentStatement:
                 {
-                    const {left, right, operator} = statement;
+                    const {left, right, operator, pos, end} = statement;
                     switch (operator) {
                         case SyntaxKind.EqualsToken:
                         {
@@ -882,6 +882,92 @@ export function genIR(ast: ProgramNode) {
                             const assignIRCodeRight = genExpersionNodeForRValue(right!);
                             methodSymbol.codes.push(createAssignIRCode(assignIRCodeLeft, assignIRCodeRight));
 
+                            break;
+                        }
+                        case SyntaxKind.PlusEqualsToken:
+                        {
+                            genStatement({
+                                kind: SyntaxKind.AssignmentStatement,
+                                operator: SyntaxKind.EqualsToken,
+                                left,
+                                right: {
+                                    kind: SyntaxKind.BinaryExpression,
+                                    left,
+                                    right: right!,
+                                    operator: SyntaxKind.PlusToken,
+                                    pos,
+                                    end,
+                                },
+                                pos,
+                                end,
+                            });
+                            break;
+                        }
+                        case SyntaxKind.MinusEqualsToken:
+                        {
+                            genStatement({
+                                kind: SyntaxKind.AssignmentStatement,
+                                operator: SyntaxKind.EqualsToken,
+                                left,
+                                right: {
+                                    kind: SyntaxKind.BinaryExpression,
+                                    left,
+                                    right: right!,
+                                    operator: SyntaxKind.MinusToken,
+                                    pos,
+                                    end,
+                                },
+                                pos,
+                                end,
+                            });
+                            break;
+                        }
+                        case SyntaxKind.PlusPlusToken:
+                        {
+                            genStatement({
+                                kind: SyntaxKind.AssignmentStatement,
+                                operator: SyntaxKind.EqualsToken,
+                                left,
+                                right: {
+                                    kind: SyntaxKind.BinaryExpression,
+                                    left,
+                                    right: {
+                                        kind: SyntaxKind.IntLiteral,
+                                        value: '1',
+                                        pos,
+                                        end,
+                                    },
+                                    operator: SyntaxKind.PlusToken,
+                                    pos,
+                                    end,
+                                },
+                                pos,
+                                end,
+                            });
+                            break;
+                        }
+                        case SyntaxKind.MinusMinusToken:
+                        {
+                            genStatement({
+                                kind: SyntaxKind.AssignmentStatement,
+                                operator: SyntaxKind.EqualsToken,
+                                left,
+                                right: {
+                                    kind: SyntaxKind.BinaryExpression,
+                                    left,
+                                    right: {
+                                        kind: SyntaxKind.IntLiteral,
+                                        value: '1',
+                                        pos,
+                                        end,
+                                    },
+                                    operator: SyntaxKind.MinusToken,
+                                    pos,
+                                    end,
+                                },
+                                pos,
+                                end,
+                            });
                             break;
                         }
                     }
