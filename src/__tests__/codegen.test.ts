@@ -26,6 +26,7 @@ const codegenInputCases: string[] = [
     '06-control-flow.dcf',
     '07-recursion.dcf',
     '08-array.dcf',
+    '09-global.dcf',
 ];
 
 describe('codegen basic cases', () => {

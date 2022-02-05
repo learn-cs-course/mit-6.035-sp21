@@ -106,7 +106,7 @@ interface StringLiteralArgumentIRCode {
     label: string;
 }
 
-interface IdentifierArgumentIRCode {
+export interface IdentifierArgumentIRCode {
     type: IRCodeType.argument;
     kind: SyntaxKind.Identifier;
     name: string;
@@ -172,7 +172,7 @@ interface TmpValue {
     name: string;
 }
 
-interface IdentifierValue {
+export interface IdentifierValue {
     type: ValueType.Identifier;
     name: string;
     offset: number;
@@ -585,13 +585,19 @@ export function genIR(ast: ProgramNode) {
                             case SyntaxKind.Identifier:
                             {
                                 const symbol = symbolTable.find(argumentNode.name)!;
-                                if (symbol.kind !== 'local') {
-                                    throw new Error('unexpected');
+                                if (symbol.kind === 'global') {
+                                    argumentBuffer.push(
+                                        createArgumentIRCode(SyntaxKind.Identifier, argumentNode.name, 200)
+                                    );
+                                    break;
                                 }
-                                argumentBuffer.push(
-                                    createArgumentIRCode(SyntaxKind.Identifier, argumentNode.name, symbol.offset)
-                                );
-                                break;
+                                if (symbol.kind === 'local' || symbol.kind === 'parameter') {
+                                    argumentBuffer.push(
+                                        createArgumentIRCode(SyntaxKind.Identifier, argumentNode.name, symbol.offset)
+                                    );
+                                    break;
+                                }
+                                throw new Error('unexpected');
                             }
                             case SyntaxKind.CallExpression:
                             {
@@ -761,13 +767,19 @@ export function genIR(ast: ProgramNode) {
                             case SyntaxKind.Identifier:
                             {
                                 const symbol = symbolTable.find(argumentNode.name)!;
-                                if (symbol.kind !== 'local') {
-                                    throw new Error('unexpected');
+                                if (symbol.kind === 'global') {
+                                    argumentBuffer.push(
+                                        createArgumentIRCode(SyntaxKind.Identifier, argumentNode.name, 200)
+                                    );
+                                    break;
                                 }
-                                argumentBuffer.push(
-                                    createArgumentIRCode(SyntaxKind.Identifier, argumentNode.name, symbol.offset)
-                                );
-                                break;
+                                if (symbol.kind === 'local' || symbol.kind === 'parameter') {
+                                    argumentBuffer.push(
+                                        createArgumentIRCode(SyntaxKind.Identifier, argumentNode.name, symbol.offset)
+                                    );
+                                    break;
+                                }
+                                throw new Error('unexpected');
                             }
                             case SyntaxKind.CallExpression:
                             {
