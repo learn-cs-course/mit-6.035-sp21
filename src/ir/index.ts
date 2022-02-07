@@ -16,6 +16,8 @@ import {
     UnaryOperator,
     StatementNode,
     ForInitializerNode,
+    ForIncrementNode,
+    AssignmentStatementNode,
 } from '../types/grammar';
 import {SymbolTable} from './symbolTable';
 
@@ -802,7 +804,7 @@ export function genIR(ast: ProgramNode) {
 
         methodSymbol.codes.push(createEnterIRCode());
 
-        function genStatement(statement: StatementNode | ForInitializerNode) {
+        function genStatement(statement: StatementNode | ForInitializerNode | ForIncrementNode) {
             switch (statement.kind) {
                 case SyntaxKind.CallStatement:
                 {
@@ -813,17 +815,6 @@ export function genIR(ast: ProgramNode) {
                     methodSymbol.codes.push(
                         createCallIRCode(callee.name, statement.expression.arguments.length)
                     );
-
-                    break;
-                }
-                case SyntaxKind.ForInitializer:
-                {
-                    const {declaration, expression} = statement;
-
-                    const assignIRCodeLeft = genExpersionNodeForRValue(declaration);
-                    const assignIRCodeRight = genExpersionNodeForRValue(expression);
-                    // @ts-expect-error
-                    methodSymbol.codes.push(createAssignIRCode(assignIRCodeLeft, assignIRCodeRight));
 
                     break;
                 }
@@ -1024,6 +1015,30 @@ export function genIR(ast: ProgramNode) {
                     methodSymbol.codes.push(createJumpIRCode(returnLabel));
                     break;
                 }
+                case SyntaxKind.ForInitializer:
+                {
+                    const {declaration, expression} = statement;
+
+                    const assignIRCodeLeft = genExpersionNodeForRValue(declaration);
+                    const assignIRCodeRight = genExpersionNodeForRValue(expression);
+                    // @ts-expect-error
+                    methodSymbol.codes.push(createAssignIRCode(assignIRCodeLeft, assignIRCodeRight));
+
+                    break;
+                }
+                case SyntaxKind.ForIncrement:
+                {
+                    const assignStmt: AssignmentStatementNode = {
+                        kind: SyntaxKind.AssignmentStatement,
+                        left: statement.declaration,
+                        right: statement.expression,
+                        operator: statement.operator,
+                        pos: statement.pos,
+                        end: statement.end,
+                    };
+                    genStatement(assignStmt);
+                    break;
+                }
                 case SyntaxKind.ForStatement:
                 {
                     const conditionLabel = globalLabels.getLabel();
@@ -1043,121 +1058,8 @@ export function genIR(ast: ProgramNode) {
 
                     const incrementLabelIRCode = createLabelIRCode(incrementLabel);
                     methodSymbol.codes.push(incrementLabelIRCode);
+                    genStatement(statement.increment);
 
-                    const {declaration, operator, expression} = statement.increment;
-                    if (declaration.kind !== SyntaxKind.Identifier) {
-                        // @todo 数组的事情都不处理
-                        break;
-                    }
-                    switch (operator) {
-                        case SyntaxKind.PlusPlusToken:
-                        {
-                            const tmpValue = {
-                                type: ValueType.Tmp,
-                                name: symbolTable.addTmpVariable(),
-                            } as const;
-
-                            const identifierValue = genExpersionNodeForRValue(declaration);
-
-                            // t = i + 1;
-                            methodSymbol.codes.push(createBinaryIRCode(
-                                SyntaxKind.PlusToken,
-                                tmpValue,
-                                identifierValue,
-                                {
-                                    type: ValueType.Imm,
-                                    value: 1,
-                                }
-                            ));
-
-                            // i = t;
-                            methodSymbol.codes.push(createAssignIRCode(
-                                // @ts-expect-error
-                                identifierValue,
-                                tmpValue
-                            ));
-                            break;
-                        }
-                        case SyntaxKind.MinusMinusToken:
-                        {
-                            const tmpValue = {
-                                type: ValueType.Tmp,
-                                name: symbolTable.addTmpVariable(),
-                            } as const;
-
-                            const identifierValue = genExpersionNodeForRValue(declaration);
-
-                            // t = i - 1;
-                            methodSymbol.codes.push(createBinaryIRCode(
-                                SyntaxKind.MinusToken,
-                                tmpValue,
-                                identifierValue,
-                                {
-                                    type: ValueType.Imm,
-                                    value: 1,
-                                }
-                            ));
-
-                            // i = t;
-                            methodSymbol.codes.push(createAssignIRCode(
-                                // @ts-expect-error
-                                identifierValue,
-                                tmpValue
-                            ));
-                            break;
-                        }
-                        case SyntaxKind.PlusEqualsToken:
-                        {
-                            const tmpValue = {
-                                type: ValueType.Tmp,
-                                name: symbolTable.addTmpVariable(),
-                            } as const;
-
-                            const identifierValue = genExpersionNodeForRValue(declaration);
-
-                            // t = i + exp;
-                            methodSymbol.codes.push(createBinaryIRCode(
-                                SyntaxKind.PlusToken,
-                                tmpValue,
-                                identifierValue,
-                                genExpersionNodeForRValue(expression!)
-                            ));
-
-                            // i = t;
-                            methodSymbol.codes.push(createAssignIRCode(
-                                // @ts-expect-error
-                                identifierValue,
-                                tmpValue
-                            ));
-                            break;
-                        }
-                        case SyntaxKind.MinusEqualsToken:
-                        {
-
-                            const tmpValue = {
-                                type: ValueType.Tmp,
-                                name: symbolTable.addTmpVariable(),
-                            } as const;
-
-                            const identifierValue = genExpersionNodeForRValue(declaration);
-
-                            // t = i - exp;
-                            methodSymbol.codes.push(createBinaryIRCode(
-                                SyntaxKind.MinusToken,
-                                tmpValue,
-                                identifierValue,
-                                genExpersionNodeForRValue(expression!)
-                            ));
-
-                            // i = t;
-                            methodSymbol.codes.push(createAssignIRCode(
-                                // @ts-expect-error
-                                identifierValue,
-                                tmpValue
-                            ));
-                            break;
-                        }
-                    }
                     methodSymbol.codes.push(createLabelIRCode(conditionLabel));
                     const nextLabelIRCode = createLabelIRCode(nextLabel);
                     genExpersionNodeForJump(
@@ -1165,6 +1067,37 @@ export function genIR(ast: ProgramNode) {
                         bodyLabelIRCode,
                         nextLabelIRCode
                     );
+                    methodSymbol.codes.push(nextLabelIRCode);
+
+                    breakLabelStack.pop();
+                    continueLabelStack.pop();
+
+                    break;
+                }
+                case SyntaxKind.WhileStatement:
+                {
+                    const beginLabel = globalLabels.getLabel();
+                    const bodyLabel = globalLabels.getLabel();
+                    const nextLabel = globalLabels.getLabel();
+
+                    breakLabelStack.push(nextLabel);
+                    continueLabelStack.push(beginLabel);
+
+                    methodSymbol.codes.push(createLabelIRCode(beginLabel));
+
+                    const bodyLabelIRCode = createLabelIRCode(bodyLabel);
+                    const nextLabelIRCode = createLabelIRCode(nextLabel);
+
+                    genExpersionNodeForJump(
+                        statement.condition,
+                        bodyLabelIRCode,
+                        nextLabelIRCode
+                    );
+
+                    methodSymbol.codes.push(bodyLabelIRCode);
+
+                    genBlockNode(statement.body);
+                    methodSymbol.codes.push(createJumpIRCode(beginLabel));
                     methodSymbol.codes.push(nextLabelIRCode);
 
                     breakLabelStack.pop();

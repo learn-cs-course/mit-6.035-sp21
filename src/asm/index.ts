@@ -278,13 +278,19 @@ export function genAssembly(ast: ProgramNode) {
                                 }
                                 case ValueType.Identifier:
                                 {
-                                    // @todo 用 r14 存 index
                                     const register = '%r13';
                                     asm.push(`    movq ${getIdentifierValue(irCode.left.index)}, ${register}`);
                                     return register;
                                 }
                                 case ValueType.Parameter:
-                                    throw new Error('todo');
+                                {
+                                    const register = '%r13';
+                                    const pos = irCode.left.index.index >= 6
+                                        ? `${(irCode.left.index.index - 4) * 8}(%rbp)`
+                                        : `${method.parameters.get(irCode.left.index.name)!.offset}(%rbp)`;
+                                    asm.push(`    movq ${pos}, ${register}`);
+                                    return register;
+                                }
                             }
                         })();
                         const pos = offset === 200
