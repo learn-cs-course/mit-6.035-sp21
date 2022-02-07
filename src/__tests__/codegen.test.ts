@@ -33,6 +33,8 @@ const codegenInputCases: string[] = [
     '13-ifs.dcf',
     '14-shortcircuit.dcf',
     '15-not.dcf',
+    '16-qsort.dcf',
+    '18-dead-code-bounds.dcf',
 ];
 
 describe('codegen basic cases', () => {

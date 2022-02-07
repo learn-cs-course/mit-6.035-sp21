@@ -2,7 +2,8 @@ import printf;
 
 int a[10];
 void main () {
-    int i;
-    i = a[17];
-    printf("Should never get here; exit out-of-bounds access before this.\n");
+  int i;
+  printf ( "expecting an error next:\n" );
+  i = a[17];
+  printf( "Should never get here; exit out-of-bounds access before this.\n" );
 }

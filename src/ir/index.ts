@@ -466,6 +466,9 @@ export function genIR(ast: ProgramNode) {
             programIR.enableReturnTypeCheck = true;
         }
 
+        const breakLabelStack: string[] = [];
+        const continueLabelStack: string[] = [];
+
         symbolTable.enterScope('block');
 
         const methodSymbol: Method = {
@@ -1025,15 +1028,25 @@ export function genIR(ast: ProgramNode) {
                 {
                     const conditionLabel = globalLabels.getLabel();
                     const bodyLabel = globalLabels.getLabel();
+                    const incrementLabel = globalLabels.getLabel();
+                    const nextLabel = globalLabels.getLabel();
+
+                    breakLabelStack.push(nextLabel);
+                    continueLabelStack.push(incrementLabel);
+
                     genStatement(statement.initializer);
                     methodSymbol.codes.push(createJumpIRCode(conditionLabel));
 
                     const bodyLabelIRCode = createLabelIRCode(bodyLabel);
                     methodSymbol.codes.push(bodyLabelIRCode);
                     genBlockNode(statement.body);
+
+                    const incrementLabelIRCode = createLabelIRCode(incrementLabel);
+                    methodSymbol.codes.push(incrementLabelIRCode);
+
                     const {declaration, operator, expression} = statement.increment;
                     if (declaration.kind !== SyntaxKind.Identifier) {
-                    // @todo 数组的事情都不处理
+                        // @todo 数组的事情都不处理
                         break;
                     }
                     switch (operator) {
@@ -1146,7 +1159,6 @@ export function genIR(ast: ProgramNode) {
                         }
                     }
                     methodSymbol.codes.push(createLabelIRCode(conditionLabel));
-                    const nextLabel = globalLabels.getLabel();
                     const nextLabelIRCode = createLabelIRCode(nextLabel);
                     genExpersionNodeForJump(
                         statement.condition,
@@ -1154,6 +1166,22 @@ export function genIR(ast: ProgramNode) {
                         nextLabelIRCode
                     );
                     methodSymbol.codes.push(nextLabelIRCode);
+
+                    breakLabelStack.pop();
+                    continueLabelStack.pop();
+
+                    break;
+                }
+                case SyntaxKind.BreakStatement:
+                {
+                    const breakLabel = breakLabelStack[breakLabelStack.length - 1];
+                    methodSymbol.codes.push(createJumpIRCode(breakLabel));
+                    break;
+                }
+                case SyntaxKind.ContinueStatement:
+                {
+                    const continueLabel = continueLabelStack[continueLabelStack.length - 1];
+                    methodSymbol.codes.push(createJumpIRCode(continueLabel));
                     break;
                 }
             }
