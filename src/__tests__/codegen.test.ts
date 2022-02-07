@@ -18,7 +18,6 @@ const codegenTestLibPath = path.resolve(__dirname, 'codegen/lib');
 const codegenInputCases = fs.readdirSync(codegenTestInputDir, 'utf-8').filter(
     name => name.endsWith('.dcf')
 );
-// const codegenInputCases: string[] = [];
 
 describe('codegen basic cases', () => {
 
@@ -78,19 +77,9 @@ const codegenHiddenTestInputDir = path.resolve(__dirname, 'codegen-hidden/input'
 const codegenHiddenTestOutputDir = path.resolve(__dirname, 'codegen-hidden/output');
 const codegenHiddenTestErrorDir = path.resolve(__dirname, 'codegen-hidden/error');
 const codegenHiddenTestLibPath = path.resolve(__dirname, 'codegen-hidden/lib');
-const failedCases: string[] = [
-    // 'hidden-18-initial-value.dcf',
-    // 'hidden-32-assign-order.dcf',
-    // 'hidden-33-binop-order.dcf',
-];
 const codegenHiddenInputCases = fs.readdirSync(codegenHiddenTestInputDir, 'utf-8').filter(
     name => name.endsWith('.dcf')
-).filter(
-    name => !failedCases.includes(name)
 );
-
-// const codegenHiddenInputCases: string[] = [
-// ];
 
 describe('codegen hidden cases', () => {
 

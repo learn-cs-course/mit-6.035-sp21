@@ -7,12 +7,13 @@ import {genIR, ValueType, ArgumentIRCode, IdentifierValue} from '../ir';
 
 class TmpSymbols {
 
-    private readonly tmpMap = new Map<string, '%r10' | '%r11' | '%r12'>();
+    private readonly tmpMap = new Map<string, '%r11' | '%r12' | '%r13'>();
 
+    // 通过避免跨调用过程中使用 %r10，避免了处理
     private registerUseRecord = {
-        '%r10': 0,
         '%r11': 0,
         '%r12': 0,
+        '%r13': 0,
     };
 
     allocateTmp(name: string) {
@@ -128,6 +129,12 @@ export function genAssembly(ast: ProgramNode) {
                         const register = CALLING_CONVENTION_REGISTERS[index];
                         asm.push(`    movq ${register}, ${parameter.offset}(%rbp)`);
                     });
+                    asm.push('    pushq %r15');
+                    asm.push('    pushq %r14');
+                    asm.push('    pushq %r13');
+                    asm.push('    pushq %r12');
+                    asm.push('    pushq %rbx');
+                    asm.push('    subq $8, %rsp');
                     asm.push('');
                     break;
                 }
@@ -151,6 +158,12 @@ export function genAssembly(ast: ProgramNode) {
                 }
                 case IRCodeType.exit:
                 {
+                    asm.push('    addq $8, %rsp');
+                    asm.push('    popq %rbx');
+                    asm.push('    popq %r12');
+                    asm.push('    popq %r13');
+                    asm.push('    popq %r14');
+                    asm.push('    popq %r15');
                     asm.push('    leave');
                     asm.push('    ret');
                     asm.push('');
@@ -171,6 +184,9 @@ export function genAssembly(ast: ProgramNode) {
                     ) {
                         throw new Error('unexpected error: ir call position');
                     }
+
+                    asm.push('    pushq %r11');
+                    asm.push('    pushq %r10');
 
                     if (callIRCode.length >= 6 && callIRCode.length % 2 !== 0) {
                         asm.push('    subq $8, %rsp');
@@ -231,6 +247,12 @@ export function genAssembly(ast: ProgramNode) {
                 }
                 case IRCodeType.call:
                 {
+                    // 兼容没有参数的情况
+                    if (irCode.length === 0) {
+                        asm.push('    pushq %r11');
+                        asm.push('    pushq %r10');
+                    }
+
                     asm.push(`    call ${irCode.name}`);
                     if (irCode.length > 6) {
                         const delta = irCode.length - 6;
@@ -241,6 +263,10 @@ export function genAssembly(ast: ProgramNode) {
                             asm.push(`    addq $${(delta + 1) * 8}, %rsp`);
                         }
                     }
+
+                    asm.push('    popq %r10');
+                    asm.push('    popq %r11');
+
                     asm.push('');
                     break;
                 }
@@ -265,6 +291,18 @@ export function genAssembly(ast: ProgramNode) {
                                 const register = tmpSymbols.allocateTmp(irCode.right.name);
                                 asm.push(`    movq ${getIdentifierValue(irCode.right)}, ${register}`);
                                 asm.push(`    movq ${register}, ${getIdentifierValue(irCode.left)}`);
+                                tmpSymbols.freeRegister(register);
+                                break;
+                            }
+                            case ValueType.Parameter:
+                            {
+                                const register = tmpSymbols.allocateTmp(irCode.right.name);
+                                const pos = irCode.right.index >= 6
+                                    ? `${(irCode.right.index - 4) * 8}(%rbp)`
+                                    : `${method.parameters.get(irCode.right.name)!.offset}(%rbp)`;
+                                asm.push(`    movq ${pos}, ${register}`);
+                                asm.push(`    movq ${register}, ${getIdentifierValue(irCode.left)}`);
+                                tmpSymbols.freeRegister(register);
                                 break;
                             }
                         }
@@ -275,8 +313,7 @@ export function genAssembly(ast: ProgramNode) {
                             switch (irCode.left.index.type) {
                                 case ValueType.Imm:
                                 {
-                                    // @todo 用 r13 存 index
-                                    const register = '%r13';
+                                    const register = '%rbx';
                                     asm.push(`    movq $${irCode.left.index.value}, ${register}`);
                                     return register;
                                 }
@@ -286,13 +323,13 @@ export function genAssembly(ast: ProgramNode) {
                                 }
                                 case ValueType.Identifier:
                                 {
-                                    const register = '%r13';
+                                    const register = '%rbx';
                                     asm.push(`    movq ${getIdentifierValue(irCode.left.index)}, ${register}`);
                                     return register;
                                 }
                                 case ValueType.Parameter:
                                 {
-                                    const register = '%r13';
+                                    const register = '%rbx';
                                     const pos = irCode.left.index.index >= 6
                                         ? `${(irCode.left.index.index - 4) * 8}(%rbp)`
                                         : `${method.parameters.get(irCode.left.index.name)!.offset}(%rbp)`;
@@ -330,6 +367,18 @@ export function genAssembly(ast: ProgramNode) {
                                 const register = tmpSymbols.allocateTmp(irCode.right.name);
                                 asm.push(`    movq ${getIdentifierValue(irCode.right)}, ${register}`);
                                 asm.push(`    movq ${register}, ${pos}`);
+                                tmpSymbols.freeRegister(register);
+                                break;
+                            }
+                            case ValueType.Parameter:
+                            {
+                                const register = tmpSymbols.allocateTmp(irCode.right.name);
+                                const rightPos = irCode.right.index >= 6
+                                    ? `${(irCode.right.index - 4) * 8}(%rbp)`
+                                    : `${method.parameters.get(irCode.right.name)!.offset}(%rbp)`;
+                                asm.push(`    movq ${rightPos}, ${register}`);
+                                asm.push(`    movq ${register}, ${pos}`);
+                                tmpSymbols.freeRegister(register);
                                 break;
                             }
                         }
@@ -356,6 +405,17 @@ export function genAssembly(ast: ProgramNode) {
                                 const register = tmpSymbols.allocateTmp(irCode.right.name);
                                 asm.push(`    movq ${getIdentifierValue(irCode.right)}, ${register}`);
                                 asm.push(`    movq ${register}, ${leftPos}`);
+                                break;
+                            }
+                            case ValueType.Parameter:
+                            {
+                                const register = tmpSymbols.allocateTmp(irCode.right.name);
+                                const rightPos = irCode.right.index >= 6
+                                    ? `${(irCode.right.index - 4) * 8}(%rbp)`
+                                    : `${method.parameters.get(irCode.right.name)!.offset}(%rbp)`;
+                                asm.push(`    movq ${rightPos}, ${register}`);
+                                asm.push(`    movq ${register}, ${leftPos}`);
+                                tmpSymbols.freeRegister(register);
                                 break;
                             }
                         }
@@ -624,9 +684,9 @@ export function genAssembly(ast: ProgramNode) {
                                 && irCode.right.type === ValueType.Tmp
                             ) {
                                 const register = tmpSymbols.getTmpRegister(irCode.right.name);
-                                asm.push(`    movq $${irCode.left.value}, %r13`);
-                                asm.push(`    subq ${register}, %r13`);
-                                asm.push(`    movq %r13, ${register}`);
+                                asm.push(`    movq $${irCode.left.value}, %r10`);
+                                asm.push(`    subq ${register}, %r10`);
+                                asm.push(`    movq %r10, ${register}`);
                                 tmpSymbols.replaceTmpName(irCode.right.name, irCode.result.name);
                                 break;
                             }
@@ -653,9 +713,9 @@ export function genAssembly(ast: ProgramNode) {
                                 && irCode.right.type === ValueType.Tmp
                             ) {
                                 const register = tmpSymbols.getTmpRegister(irCode.right.name);
-                                asm.push(`    movq ${getIdentifierValue(irCode.left)}, %r13`);
-                                asm.push(`    subq ${register}, %r13`);
-                                asm.push(`    movq %r13, ${register}`);
+                                asm.push(`    movq ${getIdentifierValue(irCode.left)}, %r10`);
+                                asm.push(`    subq ${register}, %r10`);
+                                asm.push(`    movq %r10, ${register}`);
                                 tmpSymbols.replaceTmpName(irCode.right.name, irCode.result.name);
                                 break;
                             }
@@ -1376,29 +1436,29 @@ export function genAssembly(ast: ProgramNode) {
                         irCode.left.type === ValueType.Identifier
                         && irCode.right.type === ValueType.Identifier
                     ) {
-                        asm.push(`    movq ${getIdentifierValue(irCode.left)}, %r13`);
-                        asm.push(`    cmpq ${getIdentifierValue(irCode.right)}, %r13`);
+                        asm.push(`    movq ${getIdentifierValue(irCode.left)}, %r10`);
+                        asm.push(`    cmpq ${getIdentifierValue(irCode.right)}, %r10`);
                     }
                     if (
                         irCode.left.type === ValueType.Identifier
                         && irCode.right.type === ValueType.Imm
                     ) {
-                        asm.push(`    movq ${getIdentifierValue(irCode.left)}, %r13`);
-                        asm.push(`    cmpq $${irCode.right.value}, %r13`);
+                        asm.push(`    movq ${getIdentifierValue(irCode.left)}, %r10`);
+                        asm.push(`    cmpq $${irCode.right.value}, %r10`);
                     }
                     if (
                         irCode.left.type === ValueType.Imm
                         && irCode.right.type === ValueType.Identifier
                     ) {
-                        asm.push(`    movq $${irCode.left.value}, %r13`);
-                        asm.push(`    cmpq ${getIdentifierValue(irCode.right)}, %r13`);
+                        asm.push(`    movq $${irCode.left.value}, %r10`);
+                        asm.push(`    cmpq ${getIdentifierValue(irCode.right)}, %r10`);
                     }
                     if (
                         irCode.left.type === ValueType.Imm
                         && irCode.right.type === ValueType.Imm
                     ) {
-                        asm.push(`    movq $${irCode.left.value}, %r13`);
-                        asm.push(`    cmpq $${irCode.right.value}, %r13`);
+                        asm.push(`    movq $${irCode.left.value}, %r10`);
+                        asm.push(`    cmpq $${irCode.right.value}, %r10`);
                     }
                     if (
                         irCode.left.type === ValueType.Parameter
@@ -1407,8 +1467,8 @@ export function genAssembly(ast: ProgramNode) {
                         const leftPos = irCode.left.index >= 6
                             ? `${(irCode.left.index - 4) * 8}(%rbp)`
                             : `${method.parameters.get(irCode.left.name)!.offset}(%rbp)`;
-                        asm.push(`    movq ${leftPos}, %r13`);
-                        asm.push(`    cmpq $${irCode.right.value}, %r13`);
+                        asm.push(`    movq ${leftPos}, %r10`);
+                        asm.push(`    cmpq $${irCode.right.value}, %r10`);
                     }
                     if (
                         irCode.left.type === ValueType.Imm
@@ -1417,8 +1477,8 @@ export function genAssembly(ast: ProgramNode) {
                         const rightPos = irCode.right.index >= 6
                             ? `${(irCode.right.index - 4) * 8}(%rbp)`
                             : `${method.parameters.get(irCode.right.name)!.offset}(%rbp)`;
-                        asm.push(`    movq $${irCode.left.value}, %r13`);
-                        asm.push(`    cmpq ${rightPos}, %r13`);
+                        asm.push(`    movq $${irCode.left.value}, %r10`);
+                        asm.push(`    cmpq ${rightPos}, %r10`);
                     }
                     if (
                         irCode.left.type === ValueType.Parameter
@@ -1430,8 +1490,8 @@ export function genAssembly(ast: ProgramNode) {
                         const rightPos = irCode.right.index >= 6
                             ? `${(irCode.right.index - 4) * 8}(%rbp)`
                             : `${method.parameters.get(irCode.right.name)!.offset}(%rbp)`;
-                        asm.push(`    movq ${leftPos}, %r13`);
-                        asm.push(`    cmpq ${rightPos}, %r13`);
+                        asm.push(`    movq ${leftPos}, %r10`);
+                        asm.push(`    cmpq ${rightPos}, %r10`);
                     }
                     if (
                         irCode.left.type === ValueType.Tmp
@@ -1448,8 +1508,8 @@ export function genAssembly(ast: ProgramNode) {
                         && irCode.right.type === ValueType.Tmp
                     ) {
                         const rightRegister = tmpSymbols.getTmpRegister(irCode.right.name);
-                        asm.push(`    movq ${getIdentifierValue(irCode.left)}, %r13`);
-                        asm.push(`    cmpq ${rightRegister}, %r13`);
+                        asm.push(`    movq ${getIdentifierValue(irCode.left)}, %r10`);
+                        asm.push(`    cmpq ${rightRegister}, %r10`);
                         tmpSymbols.freeRegister(rightRegister);
                     }
                     if (
@@ -1473,8 +1533,8 @@ export function genAssembly(ast: ProgramNode) {
                         && irCode.right.type === ValueType.Tmp
                     ) {
                         const rightRegister = tmpSymbols.getTmpRegister(irCode.right.name);
-                        asm.push(`    movq $${irCode.left.value}, %r13`);
-                        asm.push(`    cmpq ${rightRegister}, %r13`);
+                        asm.push(`    movq $${irCode.left.value}, %r10`);
+                        asm.push(`    cmpq ${rightRegister}, %r10`);
                         tmpSymbols.freeRegister(rightRegister);
                     }
                     if (
@@ -1484,8 +1544,8 @@ export function genAssembly(ast: ProgramNode) {
                         const leftPos = irCode.left.index >= 6
                             ? `${(irCode.left.index - 4) * 8}(%rbp)`
                             : `${method.parameters.get(irCode.left.name)!.offset}(%rbp)`;
-                        asm.push(`    movq ${leftPos}, %r13`);
-                        asm.push(`    cmpq ${getIdentifierValue(irCode.right)}, %r13`);
+                        asm.push(`    movq ${leftPos}, %r10`);
+                        asm.push(`    cmpq ${getIdentifierValue(irCode.right)}, %r10`);
                     }
                     if (
                         irCode.left.type === ValueType.Identifier
@@ -1494,8 +1554,8 @@ export function genAssembly(ast: ProgramNode) {
                         const rightPos = irCode.right.index >= 6
                             ? `${(irCode.right.index - 4) * 8}(%rbp)`
                             : `${method.parameters.get(irCode.right.name)!.offset}(%rbp)`;
-                        asm.push(`    movq ${getIdentifierValue(irCode.left)}, %r13`);
-                        asm.push(`    cmpq ${rightPos}, %r13`);
+                        asm.push(`    movq ${getIdentifierValue(irCode.left)}, %r10`);
+                        asm.push(`    cmpq ${rightPos}, %r10`);
                     }
                     if (
                         irCode.left.type === ValueType.Parameter
@@ -1505,8 +1565,8 @@ export function genAssembly(ast: ProgramNode) {
                             ? `${(irCode.left.index - 4) * 8}(%rbp)`
                             : `${method.parameters.get(irCode.left.name)!.offset}(%rbp)`;
                         const rightRegister = tmpSymbols.getTmpRegister(irCode.right.name);
-                        asm.push(`    movq ${leftPos}, %r13`);
-                        asm.push(`    cmpq ${rightRegister}, %r13`);
+                        asm.push(`    movq ${leftPos}, %r10`);
+                        asm.push(`    cmpq ${rightRegister}, %r10`);
                         tmpSymbols.freeRegister(rightRegister);
                     }
                     if (
@@ -1564,8 +1624,7 @@ export function genAssembly(ast: ProgramNode) {
                         switch (location.index.type) {
                             case ValueType.Imm:
                             {
-                                // @todo 用 r14 存 index
-                                const register = '%r13';
+                                const register = '%rbx';
                                 asm.push(`    movq $${location.index.value}, ${register}`);
                                 return register;
                             }
@@ -1575,13 +1634,13 @@ export function genAssembly(ast: ProgramNode) {
                             }
                             case ValueType.Identifier:
                             {
-                                const register = '%r13';
+                                const register = '%rbx';
                                 asm.push(`    movq ${getIdentifierValue(location.index)}, ${register}`);
                                 return register;
                             }
                             case ValueType.Parameter:
                             {
-                                const register = '%r13';
+                                const register = '%rbx';
                                 const pos = location.index.index >= 6
                                     ? `${(location.index.index - 4) * 8}(%rbp)`
                                     : `${method.parameters.get(location.index.name)!.offset}(%rbp)`;

@@ -18,6 +18,7 @@ import {
     ForInitializerNode,
     ForIncrementNode,
     AssignmentStatementNode,
+    IdentifierNode,
 } from '../types/grammar';
 import {SymbolTable} from './symbolTable';
 
@@ -967,7 +968,7 @@ export function genIR(ast: ProgramNode) {
         }
 
         methodDeclaration.parameters.forEach((parameter, index) => {
-            const size = parameter.type === SyntaxKind.IntKeyword ? 8 : 1;
+            const size = parameter.type === SyntaxKind.IntKeyword ? 8 : 8;
             const offset = symbolTable.addParameterSymbol(parameter.name.name, index, size);
             if (index < 6) {
                 methodSymbol.parameters.set(parameter.name.name, {
@@ -999,6 +1000,8 @@ export function genIR(ast: ProgramNode) {
                     switch (operator) {
                         case SyntaxKind.EqualsToken:
                         {
+                            // 右结合
+                            const assignIRCodeRight = genExpersionNodeForRValue(right!);
                             // eslint-disable-next-line @typescript-eslint/init-declarations
                             let assignIRCodeLeft: IdentifierValue | ParameterValue | ArrayLocationValue;
                             outer: switch (left.kind) {
@@ -1065,21 +1068,80 @@ export function genIR(ast: ProgramNode) {
                                     break;
                                 }
                             }
-                            const assignIRCodeRight = genExpersionNodeForRValue(right!);
                             methodSymbol.codes.push(createAssignIRCode(assignIRCodeLeft, assignIRCodeRight));
 
                             break;
                         }
                         case SyntaxKind.PlusEqualsToken:
                         {
+                            if (left.kind === SyntaxKind.Identifier) {
+                                genStatement({
+                                    kind: SyntaxKind.AssignmentStatement,
+                                    operator: SyntaxKind.EqualsToken,
+                                    left,
+                                    right: {
+                                        kind: SyntaxKind.BinaryExpression,
+                                        left,
+                                        right: right!,
+                                        operator: SyntaxKind.PlusToken,
+                                        pos,
+                                        end,
+                                    },
+                                    pos,
+                                    end,
+                                });
+                                break;
+                            }
+                            // a[inc(1)] += inc(5)
+                            // right = inc(5)
+                            const stackValueRight = symbolTable.addStackVariable();
+                            const rightIdentifierNode: IdentifierNode = {
+                                kind: SyntaxKind.Identifier,
+                                name: stackValueRight.name,
+                                pos,
+                                end,
+                            };
                             genStatement({
                                 kind: SyntaxKind.AssignmentStatement,
                                 operator: SyntaxKind.EqualsToken,
-                                left,
+                                left: rightIdentifierNode,
+                                right,
+                                pos,
+                                end,
+                            });
+
+                            // index = inc(1)
+                            const stackValueIndex = symbolTable.addStackVariable();
+                            const indexIdentifierNode: IdentifierNode = {
+                                kind: SyntaxKind.Identifier,
+                                name: stackValueIndex.name,
+                                pos,
+                                end,
+                            };
+                            genStatement({
+                                kind: SyntaxKind.AssignmentStatement,
+                                operator: SyntaxKind.EqualsToken,
+                                left: indexIdentifierNode,
+                                right: left.index,
+                                pos,
+                                end,
+                            });
+
+                            // a[index] = a[index] + right
+                            genStatement({
+                                kind: SyntaxKind.AssignmentStatement,
+                                operator: SyntaxKind.EqualsToken,
+                                left: {
+                                    ...left,
+                                    index: indexIdentifierNode,
+                                },
                                 right: {
                                     kind: SyntaxKind.BinaryExpression,
-                                    left,
-                                    right: right!,
+                                    left: {
+                                        ...left,
+                                        index: indexIdentifierNode,
+                                    },
+                                    right: rightIdentifierNode,
                                     operator: SyntaxKind.PlusToken,
                                     pos,
                                     end,
@@ -1091,14 +1153,71 @@ export function genIR(ast: ProgramNode) {
                         }
                         case SyntaxKind.MinusEqualsToken:
                         {
+                            if (left.kind === SyntaxKind.Identifier) {
+                                genStatement({
+                                    kind: SyntaxKind.AssignmentStatement,
+                                    operator: SyntaxKind.EqualsToken,
+                                    left,
+                                    right: {
+                                        kind: SyntaxKind.BinaryExpression,
+                                        left,
+                                        right: right!,
+                                        operator: SyntaxKind.MinusToken,
+                                        pos,
+                                        end,
+                                    },
+                                    pos,
+                                    end,
+                                });
+                                break;
+                            }
+
+                            const stackValueRight = symbolTable.addStackVariable();
+                            const rightIdentifierNode: IdentifierNode = {
+                                kind: SyntaxKind.Identifier,
+                                name: stackValueRight.name,
+                                pos,
+                                end,
+                            };
                             genStatement({
                                 kind: SyntaxKind.AssignmentStatement,
                                 operator: SyntaxKind.EqualsToken,
-                                left,
+                                left: rightIdentifierNode,
+                                right,
+                                pos,
+                                end,
+                            });
+
+                            const stackValueIndex = symbolTable.addStackVariable();
+                            const indexIdentifierNode: IdentifierNode = {
+                                kind: SyntaxKind.Identifier,
+                                name: stackValueIndex.name,
+                                pos,
+                                end,
+                            };
+                            genStatement({
+                                kind: SyntaxKind.AssignmentStatement,
+                                operator: SyntaxKind.EqualsToken,
+                                left: indexIdentifierNode,
+                                right: left.index,
+                                pos,
+                                end,
+                            });
+
+                            genStatement({
+                                kind: SyntaxKind.AssignmentStatement,
+                                operator: SyntaxKind.EqualsToken,
+                                left: {
+                                    ...left,
+                                    index: indexIdentifierNode,
+                                },
                                 right: {
                                     kind: SyntaxKind.BinaryExpression,
-                                    left,
-                                    right: right!,
+                                    left: {
+                                        ...left,
+                                        index: indexIdentifierNode,
+                                    },
+                                    right: rightIdentifierNode,
                                     operator: SyntaxKind.MinusToken,
                                     pos,
                                     end,
@@ -1110,20 +1229,73 @@ export function genIR(ast: ProgramNode) {
                         }
                         case SyntaxKind.PlusPlusToken:
                         {
-                            genStatement({
-                                kind: SyntaxKind.AssignmentStatement,
-                                operator: SyntaxKind.EqualsToken,
-                                left,
-                                right: {
-                                    kind: SyntaxKind.BinaryExpression,
+                            if (left.kind === SyntaxKind.Identifier) {
+                                genStatement({
+                                    kind: SyntaxKind.AssignmentStatement,
+                                    operator: SyntaxKind.EqualsToken,
                                     left,
                                     right: {
-                                        kind: SyntaxKind.IntLiteral,
-                                        value: '1',
+                                        kind: SyntaxKind.BinaryExpression,
+                                        left,
+                                        right: {
+                                            kind: SyntaxKind.IntLiteral,
+                                            value: '1',
+                                            pos,
+                                            end,
+                                        },
+                                        operator: SyntaxKind.PlusToken,
                                         pos,
                                         end,
                                     },
-                                    operator: SyntaxKind.PlusToken,
+                                    pos,
+                                    end,
+                                });
+                                break;
+                            }
+
+                            const stackValueIndex = symbolTable.addStackVariable();
+                            const indexIdentifierNode: IdentifierNode = {
+                                kind: SyntaxKind.Identifier,
+                                name: stackValueIndex.name,
+                                pos,
+                                end,
+                            };
+                            genStatement({
+                                kind: SyntaxKind.AssignmentStatement,
+                                operator: SyntaxKind.EqualsToken,
+                                left: indexIdentifierNode,
+                                right: left.index,
+                                pos,
+                                end,
+                            });
+
+                            genStatement({
+                                kind: SyntaxKind.AssignmentStatement,
+                                operator: SyntaxKind.EqualsToken,
+                                left: {
+                                    ...left,
+                                    index: indexIdentifierNode,
+                                },
+                                right: {
+                                    kind: SyntaxKind.BinaryExpression,
+                                    left: {
+                                        ...left,
+                                        index: indexIdentifierNode,
+                                    },
+                                    right: {
+                                        kind: SyntaxKind.BinaryExpression,
+                                        left,
+                                        right: {
+                                            kind: SyntaxKind.IntLiteral,
+                                            value: '1',
+                                            pos,
+                                            end,
+                                        },
+                                        operator: SyntaxKind.PlusToken,
+                                        pos,
+                                        end,
+                                    },
+                                    operator: SyntaxKind.MinusToken,
                                     pos,
                                     end,
                                 },
@@ -1134,16 +1306,69 @@ export function genIR(ast: ProgramNode) {
                         }
                         case SyntaxKind.MinusMinusToken:
                         {
+                            if (left.kind === SyntaxKind.Identifier) {
+                                genStatement({
+                                    kind: SyntaxKind.AssignmentStatement,
+                                    operator: SyntaxKind.EqualsToken,
+                                    left,
+                                    right: {
+                                        kind: SyntaxKind.BinaryExpression,
+                                        left,
+                                        right: {
+                                            kind: SyntaxKind.IntLiteral,
+                                            value: '1',
+                                            pos,
+                                            end,
+                                        },
+                                        operator: SyntaxKind.MinusToken,
+                                        pos,
+                                        end,
+                                    },
+                                    pos,
+                                    end,
+                                });
+                                break;
+                            }
+
+                            const stackValueIndex = symbolTable.addStackVariable();
+                            const indexIdentifierNode: IdentifierNode = {
+                                kind: SyntaxKind.Identifier,
+                                name: stackValueIndex.name,
+                                pos,
+                                end,
+                            };
                             genStatement({
                                 kind: SyntaxKind.AssignmentStatement,
                                 operator: SyntaxKind.EqualsToken,
-                                left,
+                                left: indexIdentifierNode,
+                                right: left.index,
+                                pos,
+                                end,
+                            });
+
+                            genStatement({
+                                kind: SyntaxKind.AssignmentStatement,
+                                operator: SyntaxKind.EqualsToken,
+                                left: {
+                                    ...left,
+                                    index: indexIdentifierNode,
+                                },
                                 right: {
                                     kind: SyntaxKind.BinaryExpression,
-                                    left,
+                                    left: {
+                                        ...left,
+                                        index: indexIdentifierNode,
+                                    },
                                     right: {
-                                        kind: SyntaxKind.IntLiteral,
-                                        value: '1',
+                                        kind: SyntaxKind.BinaryExpression,
+                                        left,
+                                        right: {
+                                            kind: SyntaxKind.IntLiteral,
+                                            value: '1',
+                                            pos,
+                                            end,
+                                        },
+                                        operator: SyntaxKind.MinusToken,
                                         pos,
                                         end,
                                     },
@@ -1299,7 +1524,7 @@ export function genIR(ast: ProgramNode) {
             symbolTable.enterScope('block');
             node.fields.forEach(field => {
                 const type = field.type;
-                const typeSize = type === SyntaxKind.IntKeyword ? 8 : 1;
+                const typeSize = type === SyntaxKind.IntKeyword ? 8 : 8;
                 field.declarations.forEach(declaration => {
                     if (declaration.kind === SyntaxKind.Identifier) {
                         const localSymbol = symbolTable.addLocal(declaration.name, typeSize, typeSize);
