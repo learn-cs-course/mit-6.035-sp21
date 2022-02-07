@@ -129,6 +129,7 @@ export class SymbolTable {
         }
 
         scope.symbols.set(localSymbol.name, localSymbol);
+        return localSymbol;
     }
 
     addStackVariable(): LocalSymbol {

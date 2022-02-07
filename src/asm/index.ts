@@ -303,7 +303,7 @@ export function genAssembly(ast: ProgramNode) {
                         })();
                         const pos = offset === 200
                             ? `${irCode.left.name}(,${indexPos}, ${irCode.left.typeSize})`
-                            : 'todo';
+                            : `${irCode.left.offset}(%rbp, ${indexPos}, ${irCode.left.typeSize})`;
 
                         asm.push(`    movl $${irCode.left.methodNameLength}, %r14d`);
                         asm.push(`    movl $${irCode.left.methodName}, %r15d`);
@@ -933,7 +933,7 @@ export function genAssembly(ast: ProgramNode) {
                             ) {
                                 const register = tmpSymbols.allocateTmp(irCode.result.name);
                                 asm.push(`    movq ${getIdentifierValue(irCode.left)}, %rax`);
-                                asm.push(`    movq ${getIdentifierValue(irCode.right)} ${register}`);
+                                asm.push(`    movq ${getIdentifierValue(irCode.right)}, ${register}`);
                                 asm.push('    cqto');
                                 asm.push(`    idivq ${register}`);
                                 asm.push(`    movq %rax, ${register}`);
@@ -945,7 +945,7 @@ export function genAssembly(ast: ProgramNode) {
                             ) {
                                 const register = tmpSymbols.allocateTmp(irCode.result.name);
                                 asm.push(`    movq $${irCode.left.value}, %rax`);
-                                asm.push(`    movq ${getIdentifierValue(irCode.right)} ${register}`);
+                                asm.push(`    movq ${getIdentifierValue(irCode.right)}, ${register}`);
                                 asm.push('    cqto');
                                 asm.push(`    idivq ${register}`);
                                 asm.push(`    movq %rax, ${register}`);
@@ -1147,7 +1147,7 @@ export function genAssembly(ast: ProgramNode) {
                             ) {
                                 const register = tmpSymbols.allocateTmp(irCode.result.name);
                                 asm.push(`    movq ${getIdentifierValue(irCode.left)}, %rax`);
-                                asm.push(`    movq ${getIdentifierValue(irCode.right)} ${register}`);
+                                asm.push(`    movq ${getIdentifierValue(irCode.right)}, ${register}`);
                                 asm.push('    cqto');
                                 asm.push(`    idivq ${register}`);
                                 asm.push(`    movq %rdx, ${register}`);
@@ -1159,7 +1159,7 @@ export function genAssembly(ast: ProgramNode) {
                             ) {
                                 const register = tmpSymbols.allocateTmp(irCode.result.name);
                                 asm.push(`    movq $${irCode.left.value}, %rax`);
-                                asm.push(`    movq ${getIdentifierValue(irCode.right)} ${register}`);
+                                asm.push(`    movq ${getIdentifierValue(irCode.right)}, ${register}`);
                                 asm.push('    cqto');
                                 asm.push(`    idivq ${register}`);
                                 asm.push(`    movq %rdx, ${register}`);
@@ -1599,8 +1599,8 @@ export function genAssembly(ast: ProgramNode) {
                     asm.push('    jge .exit_array_check');
 
                     const pos = offset === 200
-                        ? `${location.name}(,${indexPos}, ${location.typeSize})`
-                        : 'todo';
+                        ? `${location.name}(, ${indexPos}, ${location.typeSize})`
+                        : `${location.offset}(%rbp, ${indexPos}, ${location.typeSize})`;
                     asm.push(`    movq ${pos}, ${register}`);
                     asm.push('');
                     break;

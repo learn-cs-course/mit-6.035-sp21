@@ -569,6 +569,14 @@ export function genIR(ast: ProgramNode) {
                         value: parseInt(node.value, radix),
                     };
                 }
+                case SyntaxKind.CharLiteral:
+                {
+                    return {
+                        type: ValueType.Imm,
+                        // 因为 value 的字符串有单引号包着，所以 index 取 1
+                        value: node.value.charCodeAt(1),
+                    };
+                }
                 case SyntaxKind.Identifier:
                 {
                     const symbol = symbolTable.find(node.name);
@@ -1294,14 +1302,53 @@ export function genIR(ast: ProgramNode) {
                 const typeSize = type === SyntaxKind.IntKeyword ? 8 : 1;
                 field.declarations.forEach(declaration => {
                     if (declaration.kind === SyntaxKind.Identifier) {
-                        symbolTable.addLocal(declaration.name, typeSize, typeSize);
+                        const localSymbol = symbolTable.addLocal(declaration.name, typeSize, typeSize);
+                        methodSymbol.codes.push(
+                            createAssignIRCode(
+                                {
+                                    type: ValueType.Identifier,
+                                    name: declaration.name,
+                                    offset: localSymbol.offset,
+                                },
+                                {
+                                    type: ValueType.Imm,
+                                    value: 0,
+                                }
+                            )
+                        );
                     }
                     else {
                         const name = declaration.name.name;
                         const length = declaration.size.value.startsWith('0x')
                             ? parseInt(declaration.size.value, 16)
                             : parseInt(declaration.size.value, 10);
-                        symbolTable.addLocal(name, typeSize, length * typeSize);
+                        const localSymbol = symbolTable.addLocal(name, typeSize, length * typeSize);
+
+                        for (let i = 0; i < length; i++) {
+                            const label = programIR.constants.getLabel(`"${methodSymbol.name}"`);
+                            const arrayLocation: ArrayLocationValue = {
+                                type: ValueType.ArrayLocation,
+                                name: localSymbol.name,
+                                index: {
+                                    type: ValueType.Imm,
+                                    value: i,
+                                },
+                                typeSize,
+                                length,
+                                methodName: label,
+                                methodNameLength: methodSymbol.name.length,
+                                offset: localSymbol.offset,
+                            };
+                            methodSymbol.codes.push(
+                                createAssignIRCode(
+                                    arrayLocation,
+                                    {
+                                        type: ValueType.Imm,
+                                        value: 0,
+                                    }
+                                )
+                            );
+                        }
                     }
                 });
             });

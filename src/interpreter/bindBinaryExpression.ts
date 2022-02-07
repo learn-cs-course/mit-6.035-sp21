@@ -21,7 +21,7 @@ export function bindBinaryExpression(expression: BinaryExpressionNode, context: 
             if (left.nodeType === Type.Int && right.nodeType === Type.Int) {
                 expression.nodeType = Type.Int;
             }
-            else {
+            else if (left.nodeType !== Type.Unknown && right.nodeType !== Type.Unknown) {
                 throw new Error('Invalid operands for binary expression');
             }
             break;
@@ -32,7 +32,7 @@ export function bindBinaryExpression(expression: BinaryExpressionNode, context: 
             if (left.nodeType === Type.Int && right.nodeType === Type.Int) {
                 expression.nodeType = Type.Bool;
             }
-            else {
+            else if (left.nodeType !== Type.Unknown && right.nodeType !== Type.Unknown) {
                 throw new Error('Invalid operands for binary expression');
             }
             break;
@@ -44,7 +44,7 @@ export function bindBinaryExpression(expression: BinaryExpressionNode, context: 
             ) {
                 expression.nodeType = Type.Bool;
             }
-            else {
+            else if (left.nodeType !== Type.Unknown && right.nodeType !== Type.Unknown) {
                 throw new Error('Invalid operands for binary expression');
             }
             break;
@@ -53,7 +53,7 @@ export function bindBinaryExpression(expression: BinaryExpressionNode, context: 
             if (left.nodeType === Type.Bool && right.nodeType === Type.Bool) {
                 expression.nodeType = Type.Bool;
             }
-            else {
+            else if (left.nodeType !== Type.Unknown && right.nodeType !== Type.Unknown) {
                 throw new Error('Invalid operands for binary expression');
             }
             break;

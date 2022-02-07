@@ -50,6 +50,10 @@ const rule: RuleObject = {
                         ) {
                             return;
                         }
+                        // 不用比较相反的情况，因为 left 是 assign 的左值
+                        if (leftNodeType === Type.Int && rightNodeType === Type.Char) {
+                            return;
+                        }
                         if (leftNodeType !== rightNodeType) {
                             context.report('lhs and rhs must be same type');
                         }
