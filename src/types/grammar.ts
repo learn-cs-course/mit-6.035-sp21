@@ -240,6 +240,7 @@ export const enum IRCodeType {
     conditionalJump,
     jump,
     arrayLocation,
+    functionReturnCheck,
 }
 
 interface IdentifierSymbol {

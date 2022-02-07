@@ -88,10 +88,18 @@ export function genAssembly(ast: ProgramNode) {
         asm.push('');
     }
 
-    if (ir.enbaleArrayBoundCheck) {
+    if (ir.enableArrayBoundCheck) {
         asm.push('.err_array_check_start:');
         asm.push('    .string "*** RUNTIME ERROR ***: Array out of Bounds access in method \\""');
         asm.push('.err_array_check_end:');
+        asm.push('    .string "\\"\\n"');
+        asm.push('');
+    }
+
+    if (ir.enableReturnCheck) {
+        asm.push('.err_return_check_start:');
+        asm.push('    .string "*** RUNTIME ERROR ***: No return value from non-void method \\""');
+        asm.push('.err_return_check_end:');
         asm.push('    .string "\\"\\n"');
         asm.push('');
     }
@@ -1597,11 +1605,18 @@ export function genAssembly(ast: ProgramNode) {
                     asm.push('');
                     break;
                 }
+                case IRCodeType.functionReturnCheck:
+                {
+                    asm.push(`    movl $${irCode.methodNameLength}, %r14d`);
+                    asm.push(`    movl $${irCode.methodName}, %r15d`);
+                    asm.push('    jmp .exit_return_check');
+                    break;
+                }
             }
         }
     });
 
-    if (ir.enbaleArrayBoundCheck) {
+    if (ir.enableArrayBoundCheck) {
         asm.push('.exit_array_check:');
         asm.push('    movl $61, %edx');
         asm.push('    movl $.err_array_check_start, %ecx');
@@ -1631,6 +1646,31 @@ export function genAssembly(ast: ProgramNode) {
         // 所以我不掘强了，还是选择依赖 lib 里面的 exit 吧
         // exit 在调用过程中，会调用 fflush，将缓冲写入 stdout
         asm.push('    movq $-1, %rdi');
+        asm.push('    call exit');
+        asm.push('');
+    }
+
+    if (ir.enableReturnCheck) {
+        asm.push('.exit_return_check:');
+        asm.push('    movl $61, %edx');
+        asm.push('    movl $.err_return_check_start, %ecx');
+        asm.push('    movl $2, %ebx');
+        asm.push('    movl $4, %eax');
+        asm.push('    int $0x80');
+        asm.push('');
+        asm.push('    movl %r14d, %edx');
+        asm.push('    movl %r15d, %ecx');
+        asm.push('    movl $2, %ebx');
+        asm.push('    movl $4, %eax');
+        asm.push('    int $0x80');
+        asm.push('');
+        asm.push('    movl $2, %edx');
+        asm.push('    movl $.err_return_check_end, %ecx');
+        asm.push('    movl $2, %ebx');
+        asm.push('    movl $4, %eax');
+        asm.push('    int $0x80');
+        asm.push('');
+        asm.push('    movq $-2, %rdi');
         asm.push('    call exit');
         asm.push('');
     }

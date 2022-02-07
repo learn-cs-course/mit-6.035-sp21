@@ -47,7 +47,8 @@ type IRPlainCode = EnterIRCode
     | LabelIRCode
     | ConditionalJumpIRCode
     | JumpIRCode
-    | ArrayLocationIRCode;
+    | ArrayLocationIRCode
+    | FunctionReturnCheckIRCode;
 
 interface EnterIRCode {
     type: IRCodeType.enter;
@@ -317,6 +318,23 @@ function createArrayLocationIRCode(
     };
 }
 
+interface FunctionReturnCheckIRCode {
+    type: IRCodeType.functionReturnCheck;
+    methodName: string;
+    methodNameLength: number;
+}
+
+function createFunctionReturnCheckIRCode(
+    methodName: string,
+    methodNameLength: number
+): FunctionReturnCheckIRCode {
+    return {
+        type: IRCodeType.functionReturnCheck,
+        methodName,
+        methodNameLength,
+    };
+}
+
 interface FieldSymbol {
     name: string;
     typeSize: number;
@@ -400,8 +418,8 @@ export interface ProgramIR {
     globals: FieldSymbol[];
     constants: StringConstantsPool;
     methods: Method[];
-    enbaleArrayBoundCheck: boolean;
-    enableReturnTypeCheck: boolean;
+    enableArrayBoundCheck: boolean;
+    enableReturnCheck: boolean;
 }
 
 interface ParameterInMethod {
@@ -414,6 +432,7 @@ interface Method {
     parameters: Map<string, ParameterInMethod>;
     codes: IRPlainCode[];
     localSize: number;
+    enableReturnCheck: boolean;
 }
 
 class StringConstantsPool {
@@ -443,8 +462,8 @@ export function genIR(ast: ProgramNode) {
         globals: [],
         constants: new StringConstantsPool(),
         methods: [],
-        enbaleArrayBoundCheck: false,
-        enableReturnTypeCheck: false,
+        enableArrayBoundCheck: false,
+        enableReturnCheck: false,
     };
 
     const symbolTable = new SymbolTable();
@@ -464,10 +483,6 @@ export function genIR(ast: ProgramNode) {
         programIR: ProgramIR
     ) {
 
-        if (methodDeclaration.returnType !== SyntaxKind.VoidKeyword) {
-            programIR.enableReturnTypeCheck = true;
-        }
-
         const breakLabelStack: string[] = [];
         const continueLabelStack: string[] = [];
 
@@ -478,6 +493,7 @@ export function genIR(ast: ProgramNode) {
             parameters: new Map<string, ParameterInMethod>(),
             codes: [],
             localSize: 0,
+            enableReturnCheck: methodDeclaration.returnType !== SyntaxKind.VoidKeyword,
         };
 
         const returnLabel = globalLabels.getLabel();
@@ -596,7 +612,6 @@ export function genIR(ast: ProgramNode) {
                 {
                     const {left, right, operator} = node;
 
-                    // @todo 应该不是所有的情况，都能走 gen expr 的，感觉 a[x] 会复杂一些
                     const leftGen = genExpersionNodeForRValue(left);
                     const rightGen = genExpersionNodeForRValue(right);
 
@@ -605,14 +620,166 @@ export function genIR(ast: ProgramNode) {
                         return calcBinaryExpression(leftGen, rightGen, operator);
                     }
 
-                    const tmpValue = {
-                        type: ValueType.Tmp,
-                        name: symbolTable.addTmpVariable(),
-                    } as const;
+                    switch (operator) {
+                        case SyntaxKind.PlusToken:
+                        case SyntaxKind.MinusToken:
+                        case SyntaxKind.AsteriskToken:
+                        case SyntaxKind.SlashToken:
+                        case SyntaxKind.PercentToken:
+                        {
+                            const tmpValue = {
+                                type: ValueType.Tmp,
+                                name: symbolTable.addTmpVariable(),
+                            } as const;
+                            methodSymbol.codes.push(createBinaryIRCode(operator, tmpValue, leftGen, rightGen));
+                            return tmpValue;
+                        }
+                        case SyntaxKind.GreaterThanToken:
+                        case SyntaxKind.LessThanToken:
+                        case SyntaxKind.GreaterThanEqualsToken:
+                        case SyntaxKind.LessThanEqualsToken:
+                        case SyntaxKind.EqualsEqualsToken:
+                        case SyntaxKind.ExclamationEqualsToken:
+                        {
+                            const stackValue = symbolTable.addStackVariable();
+                            const identifierValue: IdentifierValue = {
+                                type: ValueType.Identifier,
+                                name: stackValue.name,
+                                offset: stackValue.offset,
+                            };
+                            const trueLabel = globalLabels.getLabel();
+                            const falseLabel = globalLabels.getLabel();
+                            const nextLabel = globalLabels.getLabel();
+                            methodSymbol.codes.push(createConditionalJumpIRCode(
+                                node.operator,
+                                leftGen,
+                                rightGen,
+                                trueLabel
+                            ));
+                            methodSymbol.codes.push(createJumpIRCode(falseLabel));
+                            methodSymbol.codes.push(createLabelIRCode(trueLabel));
+                            methodSymbol.codes.push(createAssignIRCode(identifierValue, {
+                                type: ValueType.Imm,
+                                value: 1,
+                            }));
+                            methodSymbol.codes.push(createJumpIRCode(nextLabel));
+                            methodSymbol.codes.push(createLabelIRCode(falseLabel));
+                            methodSymbol.codes.push(createAssignIRCode(identifierValue, {
+                                type: ValueType.Imm,
+                                value: 0,
+                            }));
+                            methodSymbol.codes.push(createLabelIRCode(nextLabel));
+                            return identifierValue;
+                        }
+                        case SyntaxKind.AmpersandAmpersandToken:
+                        {
+                            const stackValue = symbolTable.addStackVariable();
+                            const identifierValue: IdentifierValue = {
+                                type: ValueType.Identifier,
+                                name: stackValue.name,
+                                offset: stackValue.offset,
+                            };
+                            const trueLabel = globalLabels.getLabel();
+                            const falseLabel = globalLabels.getLabel();
+                            const nextLabel = globalLabels.getLabel();
 
-                    methodSymbol.codes.push(createBinaryIRCode(operator, tmpValue, leftGen, rightGen));
+                            const newTrueLabel = globalLabels.getLabel();
+                            const newTrueLabelIRCode = createLabelIRCode(newTrueLabel);
 
-                    return tmpValue;
+                            methodSymbol.codes.push(createConditionalJumpIRCode(
+                                SyntaxKind.EqualsEqualsToken,
+                                leftGen,
+                                {
+                                    type: ValueType.Imm,
+                                    value: 1,
+                                },
+                                newTrueLabel
+                            ));
+                            methodSymbol.codes.push(createJumpIRCode(falseLabel));
+
+                            methodSymbol.codes.push(newTrueLabelIRCode);
+
+                            methodSymbol.codes.push(createConditionalJumpIRCode(
+                                SyntaxKind.EqualsEqualsToken,
+                                rightGen,
+                                {
+                                    type: ValueType.Imm,
+                                    value: 1,
+                                },
+                                trueLabel
+                            ));
+                            methodSymbol.codes.push(createJumpIRCode(falseLabel));
+
+                            methodSymbol.codes.push(createLabelIRCode(trueLabel));
+                            methodSymbol.codes.push(createAssignIRCode(identifierValue, {
+                                type: ValueType.Imm,
+                                value: 1,
+                            }));
+                            methodSymbol.codes.push(createJumpIRCode(nextLabel));
+                            methodSymbol.codes.push(createLabelIRCode(falseLabel));
+                            methodSymbol.codes.push(createAssignIRCode(identifierValue, {
+                                type: ValueType.Imm,
+                                value: 0,
+                            }));
+                            methodSymbol.codes.push(createLabelIRCode(nextLabel));
+                            return identifierValue;
+                        }
+                        case SyntaxKind.BarBarToken:
+                        {
+                            const stackValue = symbolTable.addStackVariable();
+                            const identifierValue: IdentifierValue = {
+                                type: ValueType.Identifier,
+                                name: stackValue.name,
+                                offset: stackValue.offset,
+                            };
+
+                            const trueLabel = globalLabels.getLabel();
+                            const falseLabel = globalLabels.getLabel();
+                            const nextLabel = globalLabels.getLabel();
+
+                            const newFalseLabel = globalLabels.getLabel();
+                            const newFalseLabelIRCode = createLabelIRCode(newFalseLabel);
+
+                            methodSymbol.codes.push(createConditionalJumpIRCode(
+                                SyntaxKind.EqualsEqualsToken,
+                                leftGen,
+                                {
+                                    type: ValueType.Imm,
+                                    value: 1,
+                                },
+                                trueLabel
+                            ));
+                            methodSymbol.codes.push(createJumpIRCode(newFalseLabel));
+
+                            methodSymbol.codes.push(newFalseLabelIRCode);
+
+                            methodSymbol.codes.push(createConditionalJumpIRCode(
+                                SyntaxKind.EqualsEqualsToken,
+                                rightGen,
+                                {
+                                    type: ValueType.Imm,
+                                    value: 1,
+                                },
+                                trueLabel
+                            ));
+                            methodSymbol.codes.push(createJumpIRCode(falseLabel));
+
+                            methodSymbol.codes.push(createLabelIRCode(trueLabel));
+                            methodSymbol.codes.push(createAssignIRCode(identifierValue, {
+                                type: ValueType.Imm,
+                                value: 1,
+                            }));
+                            methodSymbol.codes.push(createJumpIRCode(nextLabel));
+                            methodSymbol.codes.push(createLabelIRCode(falseLabel));
+                            methodSymbol.codes.push(createAssignIRCode(identifierValue, {
+                                type: ValueType.Imm,
+                                value: 0,
+                            }));
+                            methodSymbol.codes.push(createLabelIRCode(nextLabel));
+                            return identifierValue;
+                        }
+                    }
+                    break;
                 }
                 case SyntaxKind.UnaryExpression:
                 {
@@ -689,7 +856,7 @@ export function genIR(ast: ProgramNode) {
                     if (symbol.kind !== 'global' && symbol.kind !== 'local') {
                         throw new Error('unexpected');
                     }
-                    programIR.enbaleArrayBoundCheck = true;
+                    programIR.enableArrayBoundCheck = true;
                     const label = programIR.constants.getLabel(`"${methodSymbol.name}"`);
                     const location: ArrayLocationValue = {
                         type: ValueType.ArrayLocation,
@@ -876,7 +1043,7 @@ export function genIR(ast: ProgramNode) {
                                         throw new Error('unexpected');
                                     }
                                     const label = programIR.constants.getLabel(`"${methodSymbol.name}"`);
-                                    programIR.enbaleArrayBoundCheck = true;
+                                    programIR.enableArrayBoundCheck = true;
                                     assignIRCodeLeft = {
                                         type: ValueType.ArrayLocation,
                                         name: name.name,
@@ -1152,6 +1319,14 @@ export function genIR(ast: ProgramNode) {
                 type: ValueType.Imm,
                 value: 0,
             }));
+        }
+
+        if (methodSymbol.enableReturnCheck) {
+            programIR.enableReturnCheck = true;
+            const label = programIR.constants.getLabel(`"${methodSymbol.name}"`);
+            methodSymbol.codes.push(
+                createFunctionReturnCheckIRCode(label, methodSymbol.name.length)
+            );
         }
 
         methodSymbol.codes.push(createLabelIRCode(returnLabel));
