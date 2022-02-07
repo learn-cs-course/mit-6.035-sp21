@@ -42,11 +42,10 @@ export class SymbolTable {
     private readonly stack: Scope[] = [];
     private currentScope: Scope | null = null;
 
-    // 当前 tmp var 的 id，这个不需要重置，只要不同就行了
-    private currentTmpId: number = 0;
+    // 当前 tmp var、stack var 的 id，这个不需要重置，只要不同就行了
+    private currentId: number = 0;
 
     // 变量分配内存位置的偏移量
-    // @todo，嵌套作用域处理
     private currentOffset: number = 0;
 
     getCurrentOffset() {
@@ -68,6 +67,10 @@ export class SymbolTable {
     exitScope() {
         this.stack.pop();
         this.currentScope = this.stack[this.stack.length - 1];
+        // 退出到 global 后重置 offset
+        if (this.currentScope && this.currentScope.kind === 'global') {
+            this.currentOffset = 0;
+        }
     }
 
     findInCurrent(name: string) {
@@ -107,12 +110,14 @@ export class SymbolTable {
      */
     addLocal(name: string, typeSize: number, size: number) {
         const scope = this.stack[this.stack.length - 1];
+        // @todo 把 bool 也当成 8 字节，目前不这么处理，参数传递会有问题
+        const length = Math.floor(size / typeSize);
         const localSymbol: LocalSymbol = {
             kind: 'local',
             name,
-            typeSize,
-            size,
-            offset: this.currentOffset - size,
+            typeSize: 8,
+            size: 8 * length,
+            offset: this.currentOffset - 8 * length,
         };
 
         this.currentOffset = localSymbol.offset;
@@ -126,9 +131,32 @@ export class SymbolTable {
         scope.symbols.set(localSymbol.name, localSymbol);
     }
 
+    addStackVariable(): LocalSymbol {
+        const scope = this.stack[this.stack.length - 1];
+        const name = `@stack${++this.currentId}`;
+        const localSymbol: LocalSymbol = {
+            kind: 'local',
+            name,
+            typeSize: 8,
+            size: 8,
+            offset: this.currentOffset - 8,
+        };
+
+        this.currentOffset = localSymbol.offset;
+
+        // @todo 内存分配先简单粗暴一些，不考虑 bool 的插入
+        const alignDelta = this.currentOffset % 8;
+        if (!Object.is(alignDelta, -0)) {
+            this.currentOffset = this.currentOffset - (8 + alignDelta);
+        }
+
+        scope.symbols.set(localSymbol.name, localSymbol);
+        return localSymbol;
+    }
+
     addTmpVariable(): string {
         const scope = this.stack[this.stack.length - 1];
-        const name = `@tmp${++this.currentTmpId}`;
+        const name = `@tmp${++this.currentId}`;
         const tmpSymbol: TmpSymbol = {
             kind: 'tmp',
             name,
@@ -137,13 +165,15 @@ export class SymbolTable {
         return name;
     }
 
-    addParameterSymbol(name: string, index: number, size: number) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    addParameterSymbol(name: string, index: number, _size: number) {
+        // @todo 把 bool 也当成 8 字节，目前不这么处理，参数传递会有问题
         const scope = this.stack[this.stack.length - 1];
         const parameterSymbol: ParameterSymbol = {
             kind: 'parameter',
             name,
             index,
-            offset: index < 6 ? this.currentOffset - size : 0,
+            offset: index < 6 ? this.currentOffset - 8 : 0,
         };
         if (index < 6) {
             this.currentOffset = parameterSymbol.offset;

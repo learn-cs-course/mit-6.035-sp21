@@ -11,6 +11,7 @@ import {
     MethodDeclarationNode,
     BlockNode,
     ExpressionNode,
+    ArgumentNode,
     BinaryOperator,
     UnaryOperator,
     StatementNode,
@@ -39,6 +40,7 @@ type IRPlainCode = EnterIRCode
     | CallIRCode
     | ArgumentIRCode
     | AssignIRCode
+    | UnaryIRCode
     | BinaryIRCode
     | LabelIRCode
     | ConditionalJumpIRCode
@@ -108,56 +110,46 @@ interface StringLiteralArgumentIRCode {
 
 export interface IdentifierArgumentIRCode {
     type: IRCodeType.argument;
-    kind: SyntaxKind.Identifier;
-    name: string;
-    offset: number;
+    kind: ValueType.Identifier;
+    value: IdentifierValue;
 }
 
 interface LiteralArgumentIRCode {
     type: IRCodeType.argument;
-    kind: SyntaxKind.IntLiteral;
-    value: string;
+    kind: ValueType.Imm;
+    value: ImmValue;
 }
 
 interface TmpArgumentIRCode {
     type: IRCodeType.argument;
     kind: ValueType.Tmp;
-    tmpName: string;
+    value: TmpValue;
+}
+
+interface ParameterArgumentIRCode {
+    type: IRCodeType.argument;
+    kind: ValueType.Parameter;
+    value: ParameterValue;
 }
 
 export type ArgumentIRCode = StringLiteralArgumentIRCode
-    | IdentifierArgumentIRCode | LiteralArgumentIRCode | TmpArgumentIRCode;
+    | IdentifierArgumentIRCode | LiteralArgumentIRCode
+    | TmpArgumentIRCode | ParameterArgumentIRCode;
 
 function createArgumentIRCode(
-    kind: SyntaxKind.Identifier | SyntaxKind.StringLiteral | SyntaxKind.IntLiteral | ValueType.Tmp,
-    value: string,
-    offset?: number
+    value: string | AssignmentIRCodeRigntValue
 ): ArgumentIRCode {
-    if (kind === SyntaxKind.Identifier) {
+    if (typeof value === 'string') {
         return {
             type: IRCodeType.argument,
-            kind,
-            name: value,
-            offset: offset!,
-        };
-    }
-    if (kind === SyntaxKind.StringLiteral) {
-        return {
-            type: IRCodeType.argument,
-            kind,
+            kind: SyntaxKind.StringLiteral,
             label: value,
-        };
-    }
-    if (kind === ValueType.Tmp) {
-        return {
-            type: IRCodeType.argument,
-            kind,
-            tmpName: value,
         };
     }
     return {
         type: IRCodeType.argument,
-        kind,
+        kind: value.type,
+        // @ts-expect-error
         value,
     };
 }
@@ -211,6 +203,26 @@ function createAssignIRCode(
         type: IRCodeType.assign,
         left,
         right,
+    };
+}
+
+interface UnaryIRCode {
+    type: IRCodeType.unary;
+    operator: UnaryOperator;
+    result: TmpValue;
+    operand: TmpValue | ImmValue | IdentifierValue | ParameterValue;
+}
+
+function createUnaryIRCode(
+    operator: UnaryOperator,
+    result: TmpValue,
+    operand: TmpValue | ImmValue | IdentifierValue | ParameterValue
+): UnaryIRCode {
+    return {
+        type: IRCodeType.unary,
+        operator,
+        result,
+        operand,
     };
 }
 
@@ -311,8 +323,9 @@ interface FieldSymbol {
 
 function createFieldSymbol(node: VariableDeclarationNode): FieldSymbol {
     if (node.kind === SyntaxKind.Identifier) {
+        // @todo 处理数据类型
         // bool 类型 1 byte，int 类型 8 byte，其他情况这里不存在
-        const size = node.nodeType === Type.Bool ? 1 : 8;
+        const size = node.nodeType === Type.Bool ? 8 : 8;
         return {
             name: node.name,
             typeSize: size,
@@ -320,7 +333,8 @@ function createFieldSymbol(node: VariableDeclarationNode): FieldSymbol {
         };
     }
     // 这里是 array
-    const singleItemSize = node.nodeType === Type.BoolArray ? 1 : 8;
+    // @todo 处理数据类型
+    const singleItemSize = node.nodeType === Type.BoolArray ? 8 : 8;
     const radix = node.size.value.startsWith('0x') ? 16 : 10;
     const size = singleItemSize * parseInt(node.size.value, radix);
     return {
@@ -463,8 +477,69 @@ export function genIR(ast: ProgramNode) {
 
         const returnLabel = globalLabels.getLabel();
 
+        function genArgumentList(argumentNodes: ArgumentNode[]) {
+
+            const argumentBuffer: ArgumentIRCode[] = [];
+
+            argumentNodes.forEach(argumentNode => {
+                switch (argumentNode.kind) {
+                    case SyntaxKind.StringLiteral:
+                    {
+                        const label = programIR.constants.getLabel(argumentNode.value);
+                        argumentBuffer.push(
+                            createArgumentIRCode(label)
+                        );
+                        break;
+                    }
+                    case SyntaxKind.IntLiteral:
+                    case SyntaxKind.TrueKeyword:
+                    case SyntaxKind.FalseKeyword:
+                    case SyntaxKind.Identifier:
+                    case SyntaxKind.CallExpression:
+                    case SyntaxKind.ArrayLocation:
+                    case SyntaxKind.BinaryExpression:
+                    case SyntaxKind.UnaryExpression:
+                    {
+                        const rvalue = genExpersionNodeForRValue(argumentNode);
+                        if (rvalue.type !== ValueType.Tmp) {
+                            argumentBuffer.push(
+                                createArgumentIRCode(rvalue)
+                            );
+                            break;
+                        }
+                        // 由于参数可能很多，因此构造临时的 identifier，在内存中保存参数
+                        const stackValue = symbolTable.addStackVariable();
+                        const identifierValue: IdentifierValue = {
+                            type: ValueType.Identifier,
+                            name: stackValue.name,
+                            offset: stackValue.offset,
+                        };
+                        methodSymbol.codes.push(
+                            createAssignIRCode(identifierValue, rvalue)
+                        );
+                        argumentBuffer.push(
+                            createArgumentIRCode(identifierValue)
+                        );
+                        break;
+                    }
+                }
+            });
+
+            argumentBuffer.forEach(code => {
+                methodSymbol.codes.push(code);
+            });
+        }
+
         function genExpersionNodeForRValue(node: ExpressionNode): AssignmentIRCodeRigntValue {
             switch (node.kind) {
+                case SyntaxKind.TrueKeyword:
+                case SyntaxKind.FalseKeyword:
+                {
+                    return {
+                        type: ValueType.Imm,
+                        value: node.value ? 1 : 0,
+                    };
+                }
                 case SyntaxKind.IntLiteral:
                 {
                     const radix = node.value.startsWith('0x') ? 16 : 10;
@@ -542,7 +617,15 @@ export function genIR(ast: ProgramNode) {
                     if (operandGen.type === ValueType.Imm) {
                         return calcUnaryExpression(operandGen, operator);
                     }
-                    throw new Error('todo');
+
+                    const tmpValue = {
+                        type: ValueType.Tmp,
+                        name: symbolTable.addTmpVariable(),
+                    } as const;
+                    methodSymbol.codes.push(
+                        createUnaryIRCode(operator, tmpValue, operandGen)
+                    );
+                    return tmpValue;
                 }
                 case SyntaxKind.CallExpression:
                 {
@@ -565,79 +648,30 @@ export function genIR(ast: ProgramNode) {
                         return imm;
                     }
 
-                    const argumentBuffer: ArgumentIRCode[] = [];
-
-                    node.arguments.forEach(argumentNode => {
-                        switch (argumentNode.kind) {
-                            case SyntaxKind.StringLiteral:
-                            {
-                                const label = programIR.constants.getLabel(argumentNode.value);
-                                argumentBuffer.push(
-                                    createArgumentIRCode(SyntaxKind.StringLiteral, label)
-                                );
-                                break;
-                            }
-                            case SyntaxKind.IntLiteral:
-                            {
-
-                                argumentBuffer.push(
-                                    createArgumentIRCode(SyntaxKind.IntLiteral, argumentNode.value)
-                                );
-                                break;
-                            }
-                            case SyntaxKind.Identifier:
-                            {
-                                const symbol = symbolTable.find(argumentNode.name)!;
-                                if (symbol.kind === 'global') {
-                                    argumentBuffer.push(
-                                        createArgumentIRCode(SyntaxKind.Identifier, argumentNode.name, 200)
-                                    );
-                                    break;
-                                }
-                                if (symbol.kind === 'local' || symbol.kind === 'parameter') {
-                                    argumentBuffer.push(
-                                        createArgumentIRCode(SyntaxKind.Identifier, argumentNode.name, symbol.offset)
-                                    );
-                                    break;
-                                }
-                                throw new Error('unexpected');
-                            }
-                            case SyntaxKind.CallExpression:
-                            {
-                                const tmp = genExpersionNodeForRValue(argumentNode);
-                                argumentBuffer.push(
-                                // @ts-expect-error
-                                    createArgumentIRCode(ValueType.Tmp, tmp.name)
-                                );
-                                break;
-                            }
-                            case SyntaxKind.BinaryExpression:
-                            {
-                                const tmp = genExpersionNodeForRValue(argumentNode);
-                                argumentBuffer.push(
-                                // @ts-expect-error
-                                    createArgumentIRCode(ValueType.Tmp, tmp.name)
-                                );
-                                break;
-                            }
-                        }
-                    });
-
-                    argumentBuffer.forEach(code => {
-                        methodSymbol.codes.push(code);
-                    });
+                    genArgumentList(node.arguments);
 
                     methodSymbol.codes.push(
                         createCallIRCode(callee.name, node.arguments.length)
                     );
 
-                    // 如果 call(1) + call(2) 就废了，我佛了，爱咋地咋滴吧
                     const tmpValue = {
                         type: ValueType.Tmp,
                         name: 'returnValue',
                     } as const;
 
-                    return tmpValue;
+                    // 由于存在 call(1) + call(2) 这样的情况，
+                    // 因此构造临时的 identifier，在内存中保存返回值
+                    // 防止连续调用的情况下 %rax 相互覆盖
+                    const stackValue = symbolTable.addStackVariable();
+                    const identifierValue: IdentifierValue = {
+                        type: ValueType.Identifier,
+                        name: stackValue.name,
+                        offset: stackValue.offset,
+                    };
+                    methodSymbol.codes.push(
+                        createAssignIRCode(identifierValue, tmpValue)
+                    );
+                    return identifierValue;
                 }
                 case SyntaxKind.ArrayLocation:
                 {
@@ -685,8 +719,8 @@ export function genIR(ast: ProgramNode) {
             switch (node.kind) {
                 case SyntaxKind.BinaryExpression:
                 {
-                // @todo 利用 fall 的性质，这里有大量的 label 可以合并
-                // 懒的优化了，先过 case，我感觉我要写不下去了
+                    // @todo 利用 fall 的性质，这里有大量的 label 可以合并
+                    // 懒的优化了，先过 case，我感觉我要写不下去了
                     switch (node.operator) {
                         case SyntaxKind.GreaterThanEqualsToken:
                         case SyntaxKind.GreaterThanToken:
@@ -695,7 +729,7 @@ export function genIR(ast: ProgramNode) {
                         case SyntaxKind.EqualsEqualsToken:
                         case SyntaxKind.ExclamationEqualsToken:
                         {
-                        // 无论如何，就算子节点里面有控制流，到比较大小这一步，都需要的是 rvalue
+                            // 无论如何，就算子节点里面有控制流，到比较大小这一步，都需要的是 rvalue
                             const left = genExpersionNodeForRValue(node.left);
                             const right = genExpersionNodeForRValue(node.right);
                             methodSymbol.codes.push(createConditionalJumpIRCode(
@@ -728,6 +762,25 @@ export function genIR(ast: ProgramNode) {
                     }
                     break;
                 }
+                case SyntaxKind.CallExpression:
+                case SyntaxKind.UnaryExpression:
+                case SyntaxKind.Identifier:
+                {
+                    // 无论如何，就算子节点里面有控制流，到比较大小这一步，都需要的是 rvalue
+                    const left = genExpersionNodeForRValue(node);
+                    const right: ImmValue = {
+                        type: ValueType.Imm,
+                        value: 0,
+                    };
+                    methodSymbol.codes.push(createConditionalJumpIRCode(
+                        SyntaxKind.ExclamationEqualsToken,
+                        left,
+                        right,
+                        trueLabel.label
+                    ));
+                    methodSymbol.codes.push(createJumpIRCode(falseLabel.label));
+                    break;
+                }
                 default:
                     throw new Error('todo');
             }
@@ -752,67 +805,7 @@ export function genIR(ast: ProgramNode) {
                 {
                     const {callee} = statement.expression;
 
-                    const argumentBuffer: ArgumentIRCode[] = [];
-
-                    statement.expression.arguments.forEach(argumentNode => {
-                        switch (argumentNode.kind) {
-                            case SyntaxKind.StringLiteral:
-                            {
-                                const label = programIR.constants.getLabel(argumentNode.value);
-                                argumentBuffer.push(
-                                    createArgumentIRCode(SyntaxKind.StringLiteral, label)
-                                );
-                                break;
-                            }
-                            case SyntaxKind.IntLiteral:
-                            {
-                                argumentBuffer.push(
-                                    createArgumentIRCode(SyntaxKind.IntLiteral, argumentNode.value)
-                                );
-                                break;
-                            }
-                            case SyntaxKind.Identifier:
-                            {
-                                const symbol = symbolTable.find(argumentNode.name)!;
-                                if (symbol.kind === 'global') {
-                                    argumentBuffer.push(
-                                        createArgumentIRCode(SyntaxKind.Identifier, argumentNode.name, 200)
-                                    );
-                                    break;
-                                }
-                                if (symbol.kind === 'local' || symbol.kind === 'parameter') {
-                                    argumentBuffer.push(
-                                        createArgumentIRCode(SyntaxKind.Identifier, argumentNode.name, symbol.offset)
-                                    );
-                                    break;
-                                }
-                                throw new Error('unexpected');
-                            }
-                            case SyntaxKind.CallExpression:
-                            {
-                                const tmp = genExpersionNodeForRValue(argumentNode);
-                                argumentBuffer.push(
-                                    // @ts-expect-error
-                                    createArgumentIRCode(ValueType.Tmp, tmp.name)
-                                );
-                                break;
-                            }
-                            case SyntaxKind.ArrayLocation:
-                            {
-                                const tmp = genExpersionNodeForRValue(argumentNode);
-                                argumentBuffer.push(
-                                    // @ts-expect-error
-                                    createArgumentIRCode(ValueType.Tmp, tmp.name)
-                                );
-                                break;
-                            }
-                        }
-                    });
-
-                    argumentBuffer.forEach(code => {
-                        methodSymbol.codes.push(code);
-                    });
-
+                    genArgumentList(statement.expression.arguments);
 
                     methodSymbol.codes.push(
                         createCallIRCode(callee.name, statement.expression.arguments.length)
@@ -839,7 +832,7 @@ export function genIR(ast: ProgramNode) {
                         {
                             // eslint-disable-next-line @typescript-eslint/init-declarations
                             let assignIRCodeLeft: IdentifierValue | ParameterValue | ArrayLocationValue;
-                            switch (left.kind) {
+                            outer: switch (left.kind) {
                                 case SyntaxKind.Identifier:
                                 {
                                     const symbol = symbolTable.find(left.name);
@@ -865,7 +858,7 @@ export function genIR(ast: ProgramNode) {
                                                 name: left.name,
                                                 index: symbol.index,
                                             };
-                                            break;
+                                            break outer;
                                         }
                                         default:
                                             throw new Error('unexpected');

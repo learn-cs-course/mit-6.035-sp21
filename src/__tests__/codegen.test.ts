@@ -28,6 +28,11 @@ const codegenInputCases: string[] = [
     '08-array.dcf',
     '09-global.dcf',
     '10-bounds.dcf',
+    '11-big-array.dcf',
+    '12-huge.dcf',
+    '13-ifs.dcf',
+    '14-shortcircuit.dcf',
+    '15-not.dcf',
 ];
 
 describe('codegen basic cases', () => {

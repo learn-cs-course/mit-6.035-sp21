@@ -234,6 +234,7 @@ export const enum IRCodeType {
     argument,
     call,
     assign,
+    unary,
     binary,
     label,
     conditionalJump,

@@ -3,19 +3,21 @@
  */
 
 import {ProgramNode, IRCodeType, SyntaxKind} from '../types/grammar';
-import {genIR, ValueType, ArgumentIRCode, IdentifierValue, IdentifierArgumentIRCode} from '../ir';
+import {genIR, ValueType, ArgumentIRCode, IdentifierValue} from '../ir';
 
 class TmpSymbols {
 
-    private readonly tmpMap = new Map<string, '%r10' | '%r11'>();
+    private readonly tmpMap = new Map<string, '%r10' | '%r11' | '%r12'>();
 
     private registerUseRecord = {
         '%r10': 0,
         '%r11': 0,
+        '%r12': 0,
     };
 
     allocateTmp(name: string) {
         const register = this.getEmptyRegister();
+        // @ts-expect-error
         this.tmpMap.set(name, register);
         return register;
     }
@@ -25,37 +27,34 @@ class TmpSymbols {
             // @todo 我无所谓了，来吧
             return '%rax' as unknown as '%r10';
         }
-        return this.tmpMap.get(name);
+        const register = this.tmpMap.get(name)!;
+        return register;
     }
 
     replaceTmpName(before: string, after: string) {
-        const register = this.getTmpRegister(before)!;
+        const register = this.tmpMap.get(before)!;
         this.tmpMap.delete(before);
         this.tmpMap.set(after, register);
         this.registerUseRecord[register] = Date.now();
     }
 
-    removeTmp(name: string) {
-        const register = this.getTmpRegister(name)!;
-        this.tmpMap.delete(name);
+    freeRegister(register: string) {
+        [...this.tmpMap.keys()].forEach(item => {
+            if (this.tmpMap.get(item) === register) {
+                this.tmpMap.delete(item);
+            }
+        });
+        // @ts-expect-error
         this.registerUseRecord[register] = 0;
     }
 
     private getEmptyRegister() {
-        if (this.registerUseRecord['%r10'] === 0) {
-            this.registerUseRecord['%r10'] = Date.now();
-            return '%r10';
-        }
-        if (this.registerUseRecord['%r11'] === 0) {
-            this.registerUseRecord['%r11'] = Date.now();
-            return '%r11';
-        }
-        if (this.registerUseRecord['%r10'] < this.registerUseRecord['%r11']) {
-            this.registerUseRecord['%r10'] = Date.now();
-            return '%r10';
-        }
-        this.registerUseRecord['%r11'] = Date.now();
-        return '%r11';
+        const register = Object.entries(this.registerUseRecord).sort((a, b) => {
+            return a[1] - b[1];
+        })[0][0];
+        // @ts-expect-error
+        this.registerUseRecord[register] = performance.now();
+        return register;
     }
 }
 
@@ -68,7 +67,7 @@ const CALLING_CONVENTION_REGISTERS = [
     '%r9',
 ];
 
-function getIdentifierValue(value: IdentifierValue | IdentifierArgumentIRCode) {
+function getIdentifierValue(value: IdentifierValue) {
     if (value.offset === 200) {
         return value.name;
     }
@@ -98,10 +97,6 @@ export function genAssembly(ast: ProgramNode) {
     }
 
     asm.push('.section .text');
-
-    if (ir.globals.length > 0) {
-        // todo
-    }
 
     ir.methods.forEach(method => {
 
@@ -139,6 +134,7 @@ export function genAssembly(ast: ProgramNode) {
                     if (irCode.value.type === ValueType.Tmp) {
                         const register = tmpSymbols.getTmpRegister(irCode.value.name);
                         asm.push(`    movq ${register}, %rax`);
+                        tmpSymbols.freeRegister(register);
                     }
                     if (irCode.value.type === ValueType.Identifier) {
                         asm.push(`    movq ${getIdentifierValue(irCode.value)}, %rax`);
@@ -178,15 +174,22 @@ export function genAssembly(ast: ProgramNode) {
                             if (code.kind === SyntaxKind.StringLiteral) {
                                 asm.push(`    pushq $${code.label}`);
                             }
-                            else if (code.kind === SyntaxKind.Identifier) {
-                                asm.push(`    pushq ${getIdentifierValue(code)}`);
+                            else if (code.kind === ValueType.Identifier) {
+                                asm.push(`    pushq ${getIdentifierValue(code.value)}`);
                             }
-                            else if (code.kind === SyntaxKind.IntLiteral) {
-                                asm.push(`    pushq $${code.value}`);
+                            else if (code.kind === ValueType.Parameter) {
+                                const pos = code.value.index >= 6
+                                    ? `${(code.value.index - 4) * 8}(%rbp)`
+                                    : `${method.parameters.get(code.value.name)!.offset}(%rbp)`;
+                                asm.push(`    pushq ${pos}`);
+                            }
+                            else if (code.kind === ValueType.Imm) {
+                                asm.push(`    pushq $${code.value.value}`);
                             }
                             else if (code.kind === ValueType.Tmp) {
-                                const register = tmpSymbols.getTmpRegister(code.tmpName);
+                                const register = tmpSymbols.getTmpRegister(code.value.name);
                                 asm.push(`    pushq ${register}`);
+                                tmpSymbols.freeRegister(register);
                             }
                             continue;
                         }
@@ -194,15 +197,22 @@ export function genAssembly(ast: ProgramNode) {
                         if (code.kind === SyntaxKind.StringLiteral) {
                             asm.push(`    movq $${code.label}, ${register}`);
                         }
-                        else if (code.kind === SyntaxKind.Identifier) {
-                            asm.push(`    movq  ${getIdentifierValue(code)}, ${register}`);
+                        else if (code.kind === ValueType.Identifier) {
+                            asm.push(`    movq ${getIdentifierValue(code.value)}, ${register}`);
                         }
-                        else if (code.kind === SyntaxKind.IntLiteral) {
-                            asm.push(`    movq $${code.value}, ${register}`);
+                        else if (code.kind === ValueType.Parameter) {
+                            const pos = code.value.index >= 6
+                                ? `${(code.value.index - 4) * 8}(%rbp)`
+                                : `${method.parameters.get(code.value.name)!.offset}(%rbp)`;
+                            asm.push(`    movq ${pos}, ${register}`);
+                        }
+                        else if (code.kind === ValueType.Imm) {
+                            asm.push(`    movq $${code.value.value}, ${register}`);
                         }
                         else if (code.kind === ValueType.Tmp) {
-                            const tmpRegister = tmpSymbols.getTmpRegister(code.tmpName);
+                            const tmpRegister = tmpSymbols.getTmpRegister(code.value.name);
                             asm.push(`    movq ${tmpRegister}, ${register}`);
+                            tmpSymbols.freeRegister(tmpRegister);
                         }
                         else {
                             // @todo
@@ -239,12 +249,13 @@ export function genAssembly(ast: ProgramNode) {
                             {
                                 const register = tmpSymbols.getTmpRegister(irCode.right.name);
                                 asm.push(`    movq ${register}, ${getIdentifierValue(irCode.left)}`);
+                                tmpSymbols.freeRegister(register);
                                 break;
                             }
                             case ValueType.Identifier:
                             {
                                 const register = tmpSymbols.allocateTmp(irCode.right.name);
-                                asm.push(`    movq  ${getIdentifierValue(irCode.right)}, ${register}`);
+                                asm.push(`    movq ${getIdentifierValue(irCode.right)}, ${register}`);
                                 asm.push(`    movq ${register}, ${getIdentifierValue(irCode.left)}`);
                                 break;
                             }
@@ -256,7 +267,7 @@ export function genAssembly(ast: ProgramNode) {
                             switch (irCode.left.index.type) {
                                 case ValueType.Imm:
                                 {
-                                    // @todo 用 r14 存 index
+                                    // @todo 用 r13 存 index
                                     const register = '%r13';
                                     asm.push(`    movq $${irCode.left.index.value}, ${register}`);
                                     return register;
@@ -269,7 +280,7 @@ export function genAssembly(ast: ProgramNode) {
                                 {
                                     // @todo 用 r14 存 index
                                     const register = '%r13';
-                                    asm.push(`    movq  ${getIdentifierValue(irCode.left.index)}, ${register}`);
+                                    asm.push(`    movq ${getIdentifierValue(irCode.left.index)}, ${register}`);
                                     return register;
                                 }
                                 case ValueType.Parameter:
@@ -297,13 +308,40 @@ export function genAssembly(ast: ProgramNode) {
                             {
                                 const register = tmpSymbols.getTmpRegister(irCode.right.name);
                                 asm.push(`    movq ${register}, ${pos}`);
+                                tmpSymbols.freeRegister(register);
                                 break;
                             }
                             case ValueType.Identifier:
                             {
                                 const register = tmpSymbols.allocateTmp(irCode.right.name);
-                                asm.push(`    movq  ${getIdentifierValue(irCode.right)}, ${register}`);
+                                asm.push(`    movq ${getIdentifierValue(irCode.right)}, ${register}`);
                                 asm.push(`    movq ${register}, ${pos}`);
+                                break;
+                            }
+                        }
+                    }
+                    else if (irCode.left.type === ValueType.Parameter) {
+                        const leftPos = irCode.left.index >= 6
+                            ? `${(irCode.left.index - 4) * 8}(%rbp)`
+                            : `${method.parameters.get(irCode.left.name)!.offset}(%rbp)`;
+                        switch (irCode.right.type) {
+                            case ValueType.Imm:
+                            {
+                                asm.push(`    movq $${irCode.right.value}, ${leftPos}`);
+                                break;
+                            }
+                            case ValueType.Tmp:
+                            {
+                                const register = tmpSymbols.getTmpRegister(irCode.right.name);
+                                asm.push(`    movq ${register}, ${leftPos}`);
+                                tmpSymbols.freeRegister(register);
+                                break;
+                            }
+                            case ValueType.Identifier:
+                            {
+                                const register = tmpSymbols.allocateTmp(irCode.right.name);
+                                asm.push(`    movq ${getIdentifierValue(irCode.right)}, ${register}`);
+                                asm.push(`    movq ${register}, ${leftPos}`);
                                 break;
                             }
                         }
@@ -311,7 +349,65 @@ export function genAssembly(ast: ProgramNode) {
                     asm.push('');
                     break;
                 }
-                // @todo 下面这坨代码，没有考虑左右都是 register 的情况
+                case IRCodeType.unary:
+                {
+                    switch (irCode.operator) {
+                        case SyntaxKind.ExclamationToken:
+                        {
+                            if (irCode.operand.type === ValueType.Identifier) {
+                                const register = tmpSymbols.allocateTmp(irCode.result.name);
+                                asm.push(`    cmpq $0, ${getIdentifierValue(irCode.operand)}`);
+                                asm.push('    sete %al');
+                                asm.push('    movzbl %al, %eax');
+                                asm.push(`    movq %rax, ${register}`);
+                            }
+                            else if (irCode.operand.type === ValueType.Tmp) {
+                                const register = tmpSymbols.getTmpRegister(irCode.operand.name);
+                                asm.push(`    cmpq $0, ${register}`);
+                                asm.push('    sete %al');
+                                asm.push('    movzbl %al, %eax');
+                                asm.push(`    movq %rax, ${register}`);
+                                tmpSymbols.replaceTmpName(irCode.operand.name, irCode.result.name);
+                            }
+                            else if (irCode.operand.type === ValueType.Parameter) {
+                                const register = tmpSymbols.allocateTmp(irCode.result.name);
+                                const pos = irCode.operand.index >= 6
+                                    ? `${(irCode.operand.index - 4) * 8}(%rbp)`
+                                    : `${method.parameters.get(irCode.operand.name)!.offset}(%rbp)`;
+                                asm.push(`    cmpq $0, ${pos}`);
+                                asm.push('    sete %al');
+                                asm.push('    movzbl %al, %eax');
+                                asm.push(`    movq %rax, ${register}`);
+                            }
+                            break;
+                        }
+                        case SyntaxKind.MinusToken:
+                        {
+                            if (irCode.operand.type === ValueType.Identifier) {
+                                const resgiter = tmpSymbols.allocateTmp(irCode.result.name);
+                                asm.push(`    movq ${getIdentifierValue(irCode.operand)}, ${resgiter}`);
+                                asm.push(`    negq ${resgiter}`);
+                            }
+                            else if (irCode.operand.type === ValueType.Tmp) {
+                                const register = tmpSymbols.getTmpRegister(irCode.operand.name);
+                                asm.push(`    negq ${register}`);
+                                tmpSymbols.replaceTmpName(irCode.operand.name, irCode.result.name);
+                            }
+                            else if (irCode.operand.type === ValueType.Parameter) {
+                                const resgiter = tmpSymbols.allocateTmp(irCode.result.name);
+                                const pos = irCode.operand.index >= 6
+                                    ? `${(irCode.operand.index - 4) * 8}(%rbp)`
+                                    : `${method.parameters.get(irCode.operand.name)!.offset}(%rbp)`;
+                                asm.push(`    movq ${pos}, ${resgiter}`);
+                                asm.push(`    negq ${resgiter}`);
+                            }
+                            break;
+                        }
+                        default:
+                            throw new Error('unexpected');
+                    }
+                    break;
+                }
                 case IRCodeType.binary:
                 {
                     switch (irCode.operator) {
@@ -323,7 +419,7 @@ export function genAssembly(ast: ProgramNode) {
                             ) {
                                 const register = tmpSymbols.allocateTmp(irCode.result.name);
                                 asm.push(`    movq ${getIdentifierValue(irCode.left)}, ${register}`);
-                                asm.push(`    addq  ${getIdentifierValue(irCode.right)}, ${register}`);
+                                asm.push(`    addq ${getIdentifierValue(irCode.right)}, ${register}`);
                                 break;
                             }
                             if (
@@ -331,7 +427,7 @@ export function genAssembly(ast: ProgramNode) {
                                 && irCode.right.type === ValueType.Identifier
                             ) {
                                 const register = tmpSymbols.allocateTmp(irCode.result.name);
-                                asm.push(`    movq  ${getIdentifierValue(irCode.right)}, ${register}`);
+                                asm.push(`    movq ${getIdentifierValue(irCode.right)}, ${register}`);
                                 asm.push(`    addq $${irCode.left.value}, ${register}`);
                                 break;
                             }
@@ -367,7 +463,7 @@ export function genAssembly(ast: ProgramNode) {
                                 && irCode.right.type === ValueType.Identifier
                             ) {
                                 const register = tmpSymbols.getTmpRegister(irCode.left.name);
-                                asm.push(`    addq  ${getIdentifierValue(irCode.right)}, ${register}`);
+                                asm.push(`    addq ${getIdentifierValue(irCode.right)}, ${register}`);
                                 tmpSymbols.replaceTmpName(irCode.left.name, irCode.result.name);
                                 break;
                             }
@@ -378,6 +474,16 @@ export function genAssembly(ast: ProgramNode) {
                                 const register = tmpSymbols.getTmpRegister(irCode.right.name);
                                 asm.push(`    addq ${getIdentifierValue(irCode.left)}, ${register}`);
                                 tmpSymbols.replaceTmpName(irCode.right.name, irCode.result.name);
+                                break;
+                            }
+                            if (
+                                irCode.left.type === ValueType.Tmp
+                                && irCode.right.type === ValueType.Tmp
+                            ) {
+                                const register = tmpSymbols.getTmpRegister(irCode.left.name);
+                                asm.push(`    addq ${tmpSymbols.getTmpRegister(irCode.right.name)}, ${register}`);
+                                tmpSymbols.replaceTmpName(irCode.left.name, irCode.result.name);
+                                tmpSymbols.freeRegister(tmpSymbols.getTmpRegister(irCode.right.name));
                                 break;
                             }
                             if (
@@ -421,6 +527,18 @@ export function genAssembly(ast: ProgramNode) {
                                 break;
                             }
                             if (
+                                irCode.left.type === ValueType.Imm
+                                && irCode.right.type === ValueType.Parameter
+                            ) {
+                                const register = tmpSymbols.allocateTmp(irCode.result.name);
+                                const rightPos = irCode.right.index >= 6
+                                    ? `${(irCode.right.index - 4) * 8}(%rbp)`
+                                    : `${method.parameters.get(irCode.right.name)!.offset}(%rbp)`;
+                                asm.push(`    movq $${irCode.left.value}, ${register}`);
+                                asm.push(`    addq ${rightPos}, ${register}`);
+                                break;
+                            }
+                            if (
                                 irCode.left.type === ValueType.Parameter
                                 && irCode.right.type === ValueType.Imm
                             ) {
@@ -432,9 +550,32 @@ export function genAssembly(ast: ProgramNode) {
                                 asm.push(`    addq $${irCode.right.value}, ${register}`);
                                 break;
                             }
-                            break;
+                            if (
+                                irCode.left.type === ValueType.Parameter
+                                && irCode.right.type === ValueType.Identifier
+                            ) {
+                                const register = tmpSymbols.allocateTmp(irCode.result.name);
+                                const leftPos = irCode.left.index >= 6
+                                    ? `${(irCode.left.index - 4) * 8}(%rbp)`
+                                    : `${method.parameters.get(irCode.left.name)!.offset}(%rbp)`;
+                                asm.push(`    movq ${leftPos}, ${register}`);
+                                asm.push(`    addq ${getIdentifierValue(irCode.right)}, ${register}`);
+                                break;
+                            }
+                            if (
+                                irCode.left.type === ValueType.Identifier
+                                && irCode.right.type === ValueType.Parameter
+                            ) {
+                                const register = tmpSymbols.allocateTmp(irCode.result.name);
+                                const rightPos = irCode.right.index >= 6
+                                    ? `${(irCode.right.index - 4) * 8}(%rbp)`
+                                    : `${method.parameters.get(irCode.right.name)!.offset}(%rbp)`;
+                                asm.push(`    movq ${getIdentifierValue(irCode.left)}, ${register}`);
+                                asm.push(`    addq ${rightPos}, ${register}`);
+                                break;
+                            }
+                            throw new Error('todo');
                         }
-                        // @todo 减法不符合交换律，我下面写的一定哪里有问题，但我不知道哪里，我好累现在
                         case SyntaxKind.MinusToken:
                         {
                             if (
@@ -443,7 +584,7 @@ export function genAssembly(ast: ProgramNode) {
                             ) {
                                 const register = tmpSymbols.allocateTmp(irCode.result.name);
                                 asm.push(`    movq ${getIdentifierValue(irCode.left)}, ${register}`);
-                                asm.push(`    subq  ${getIdentifierValue(irCode.right)}, ${register}`);
+                                asm.push(`    subq ${getIdentifierValue(irCode.right)}, ${register}`);
                                 break;
                             }
                             if (
@@ -452,7 +593,7 @@ export function genAssembly(ast: ProgramNode) {
                             ) {
                                 const register = tmpSymbols.allocateTmp(irCode.result.name);
                                 asm.push(`    movq $${irCode.left.value}, ${register}`);
-                                asm.push(`    subq  ${getIdentifierValue(irCode.right)}, ${register}`);
+                                asm.push(`    subq ${getIdentifierValue(irCode.right)}, ${register}`);
                                 break;
                             }
                             if (
@@ -469,7 +610,9 @@ export function genAssembly(ast: ProgramNode) {
                                 && irCode.right.type === ValueType.Tmp
                             ) {
                                 const register = tmpSymbols.getTmpRegister(irCode.right.name);
-                                asm.push(`    subq $${irCode.left.value}, ${register}`);
+                                asm.push(`    movq $${irCode.left.value}, %r13`);
+                                asm.push(`    subq ${register}, %r13`);
+                                asm.push(`    movq %r13, ${register}`);
                                 tmpSymbols.replaceTmpName(irCode.right.name, irCode.result.name);
                                 break;
                             }
@@ -487,7 +630,7 @@ export function genAssembly(ast: ProgramNode) {
                                 && irCode.right.type === ValueType.Identifier
                             ) {
                                 const register = tmpSymbols.getTmpRegister(irCode.left.name);
-                                asm.push(`    subq  ${getIdentifierValue(irCode.right)}, ${register}`);
+                                asm.push(`    subq ${getIdentifierValue(irCode.right)}, ${register}`);
                                 tmpSymbols.replaceTmpName(irCode.left.name, irCode.result.name);
                                 break;
                             }
@@ -496,8 +639,20 @@ export function genAssembly(ast: ProgramNode) {
                                 && irCode.right.type === ValueType.Tmp
                             ) {
                                 const register = tmpSymbols.getTmpRegister(irCode.right.name);
-                                asm.push(`    subq ${getIdentifierValue(irCode.left)}, ${register}`);
+                                asm.push(`    movq ${getIdentifierValue(irCode.left)}, %r13`);
+                                asm.push(`    subq ${register}, %r13`);
+                                asm.push(`    movq %r13, ${register}`);
                                 tmpSymbols.replaceTmpName(irCode.right.name, irCode.result.name);
+                                break;
+                            }
+                            if (
+                                irCode.left.type === ValueType.Tmp
+                                && irCode.right.type === ValueType.Tmp
+                            ) {
+                                const register = tmpSymbols.getTmpRegister(irCode.left.name);
+                                asm.push(`    subq ${tmpSymbols.getTmpRegister(irCode.right.name)}, ${register}`);
+                                tmpSymbols.replaceTmpName(irCode.left.name, irCode.result.name);
+                                tmpSymbols.freeRegister(tmpSymbols.getTmpRegister(irCode.right.name));
                                 break;
                             }
                             if (
@@ -529,6 +684,31 @@ export function genAssembly(ast: ProgramNode) {
                             }
                             if (
                                 irCode.left.type === ValueType.Parameter
+                                && irCode.right.type === ValueType.Tmp
+                            ) {
+                                const register = tmpSymbols.allocateTmp(irCode.result.name);
+                                const leftPos = irCode.left.index >= 6
+                                    ? `${(irCode.left.index - 4) * 8}(%rbp)`
+                                    : `${method.parameters.get(irCode.left.name)!.offset}(%rbp)`;
+                                asm.push(`    movq ${leftPos}, ${register}`);
+                                asm.push(`    subq ${tmpSymbols.getTmpRegister(irCode.right.name)}, ${register}`);
+                                tmpSymbols.freeRegister(tmpSymbols.getTmpRegister(irCode.right.name));
+                                break;
+                            }
+                            if (
+                                irCode.left.type === ValueType.Imm
+                                && irCode.right.type === ValueType.Parameter
+                            ) {
+                                const register = tmpSymbols.allocateTmp(irCode.result.name);
+                                const rightPos = irCode.right.index >= 6
+                                    ? `${(irCode.right.index - 4) * 8}(%rbp)`
+                                    : `${method.parameters.get(irCode.right.name)!.offset}(%rbp)`;
+                                asm.push(`    movq $${irCode.left.value}, ${register}`);
+                                asm.push(`    subq ${rightPos}, ${register}`);
+                                break;
+                            }
+                            if (
+                                irCode.left.type === ValueType.Parameter
                                 && irCode.right.type === ValueType.Imm
                             ) {
                                 const register = tmpSymbols.allocateTmp(irCode.result.name);
@@ -539,7 +719,31 @@ export function genAssembly(ast: ProgramNode) {
                                 asm.push(`    subq $${irCode.right.value}, ${register}`);
                                 break;
                             }
-                            break;
+                            if (
+                                irCode.left.type === ValueType.Parameter
+                                && irCode.right.type === ValueType.Identifier
+                            ) {
+                                const register = tmpSymbols.allocateTmp(irCode.result.name);
+                                const leftPos = irCode.left.index >= 6
+                                    ? `${(irCode.left.index - 4) * 8}(%rbp)`
+                                    : `${method.parameters.get(irCode.left.name)!.offset}(%rbp)`;
+                                asm.push(`    movq ${leftPos}, ${register}`);
+                                asm.push(`    subq ${getIdentifierValue(irCode.right)}, ${register}`);
+                                break;
+                            }
+                            if (
+                                irCode.left.type === ValueType.Identifier
+                                && irCode.right.type === ValueType.Parameter
+                            ) {
+                                const register = tmpSymbols.allocateTmp(irCode.result.name);
+                                const rightPos = irCode.right.index >= 6
+                                    ? `${(irCode.right.index - 4) * 8}(%rbp)`
+                                    : `${method.parameters.get(irCode.right.name)!.offset}(%rbp)`;
+                                asm.push(`    movq ${getIdentifierValue(irCode.left)}, ${register}`);
+                                asm.push(`    subq ${rightPos}, ${register}`);
+                                break;
+                            }
+                            throw new Error('todo');
                         }
                         case SyntaxKind.AsteriskToken:
                         {
@@ -549,7 +753,7 @@ export function genAssembly(ast: ProgramNode) {
                             ) {
                                 const register = tmpSymbols.allocateTmp(irCode.result.name);
                                 asm.push(`    movq ${getIdentifierValue(irCode.left)}, ${register}`);
-                                asm.push(`    imulq  ${getIdentifierValue(irCode.right)}, ${register}`);
+                                asm.push(`    imulq ${getIdentifierValue(irCode.right)}, ${register}`);
                                 break;
                             }
                             if (
@@ -557,7 +761,7 @@ export function genAssembly(ast: ProgramNode) {
                                 && irCode.right.type === ValueType.Identifier
                             ) {
                                 const register = tmpSymbols.allocateTmp(irCode.result.name);
-                                asm.push(`    movq  ${getIdentifierValue(irCode.right)}, ${register}`);
+                                asm.push(`    movq ${getIdentifierValue(irCode.right)}, ${register}`);
                                 asm.push(`    imulq $${irCode.left.value}, ${register}`);
                                 break;
                             }
@@ -593,7 +797,7 @@ export function genAssembly(ast: ProgramNode) {
                                 && irCode.right.type === ValueType.Identifier
                             ) {
                                 const register = tmpSymbols.getTmpRegister(irCode.left.name);
-                                asm.push(`    imulq  ${getIdentifierValue(irCode.right)}, ${register}`);
+                                asm.push(`    imulq ${getIdentifierValue(irCode.right)}, ${register}`);
                                 tmpSymbols.replaceTmpName(irCode.left.name, irCode.result.name);
                                 break;
                             }
@@ -605,6 +809,16 @@ export function genAssembly(ast: ProgramNode) {
                                 const register = tmpSymbols.getTmpRegister(irCode.right.name);
                                 asm.push(`    imulq ${getIdentifierValue(irCode.left)}, ${register}`);
                                 tmpSymbols.replaceTmpName(irCode.right.name, irCode.result.name);
+                                break;
+                            }
+                            if (
+                                irCode.left.type === ValueType.Tmp
+                                && irCode.right.type === ValueType.Tmp
+                            ) {
+                                const register = tmpSymbols.getTmpRegister(irCode.left.name);
+                                asm.push(`    imulq ${tmpSymbols.getTmpRegister(irCode.right.name)}, ${register}`);
+                                tmpSymbols.replaceTmpName(irCode.left.name, irCode.result.name);
+                                tmpSymbols.freeRegister(tmpSymbols.getTmpRegister(irCode.right.name));
                                 break;
                             }
                             if (
@@ -648,6 +862,18 @@ export function genAssembly(ast: ProgramNode) {
                                 break;
                             }
                             if (
+                                irCode.left.type === ValueType.Imm
+                                && irCode.right.type === ValueType.Parameter
+                            ) {
+                                const register = tmpSymbols.allocateTmp(irCode.result.name);
+                                const rightPos = irCode.right.index >= 6
+                                    ? `${(irCode.right.index - 4) * 8}(%rbp)`
+                                    : `${method.parameters.get(irCode.right.name)!.offset}(%rbp)`;
+                                asm.push(`    movq $${irCode.left.value}, ${register}`);
+                                asm.push(`    imulq ${rightPos}, ${register}`);
+                                break;
+                            }
+                            if (
                                 irCode.left.type === ValueType.Parameter
                                 && irCode.right.type === ValueType.Imm
                             ) {
@@ -659,7 +885,31 @@ export function genAssembly(ast: ProgramNode) {
                                 asm.push(`    imulq $${irCode.right.value}, ${register}`);
                                 break;
                             }
-                            break;
+                            if (
+                                irCode.left.type === ValueType.Parameter
+                                && irCode.right.type === ValueType.Identifier
+                            ) {
+                                const register = tmpSymbols.allocateTmp(irCode.result.name);
+                                const leftPos = irCode.left.index >= 6
+                                    ? `${(irCode.left.index - 4) * 8}(%rbp)`
+                                    : `${method.parameters.get(irCode.left.name)!.offset}(%rbp)`;
+                                asm.push(`    movq ${leftPos}, ${register}`);
+                                asm.push(`    imulq ${getIdentifierValue(irCode.right)}, ${register}`);
+                                break;
+                            }
+                            if (
+                                irCode.left.type === ValueType.Identifier
+                                && irCode.right.type === ValueType.Parameter
+                            ) {
+                                const register = tmpSymbols.allocateTmp(irCode.result.name);
+                                const rightPos = irCode.right.index >= 6
+                                    ? `${(irCode.right.index - 4) * 8}(%rbp)`
+                                    : `${method.parameters.get(irCode.right.name)!.offset}(%rbp)`;
+                                asm.push(`    movq ${getIdentifierValue(irCode.left)}, ${register}`);
+                                asm.push(`    imulq ${rightPos}, ${register}`);
+                                break;
+                            }
+                            throw new Error('todo');
                         }
                         case SyntaxKind.SlashToken:
                         {
@@ -669,7 +919,7 @@ export function genAssembly(ast: ProgramNode) {
                             ) {
                                 const register = tmpSymbols.allocateTmp(irCode.result.name);
                                 asm.push(`    movq ${getIdentifierValue(irCode.left)}, %rax`);
-                                asm.push(`    movq  ${getIdentifierValue(irCode.right)} ${register}`);
+                                asm.push(`    movq ${getIdentifierValue(irCode.right)} ${register}`);
                                 asm.push('    cqto');
                                 asm.push(`    idivq ${register}`);
                                 asm.push(`    movq %rax, ${register}`);
@@ -679,7 +929,13 @@ export function genAssembly(ast: ProgramNode) {
                                 irCode.left.type === ValueType.Imm
                                 && irCode.right.type === ValueType.Identifier
                             ) {
-                                // todo
+                                const register = tmpSymbols.allocateTmp(irCode.result.name);
+                                asm.push(`    movq $${irCode.left.value}, %rax`);
+                                asm.push(`    movq ${getIdentifierValue(irCode.right)} ${register}`);
+                                asm.push('    cqto');
+                                asm.push(`    idivq ${register}`);
+                                asm.push(`    movq %rax, ${register}`);
+                                break;
                             }
                             if (
                                 irCode.left.type === ValueType.Identifier
@@ -697,28 +953,177 @@ export function genAssembly(ast: ProgramNode) {
                                 irCode.left.type === ValueType.Imm
                                 && irCode.right.type === ValueType.Tmp
                             ) {
-                                // todo
+                                const register = tmpSymbols.getTmpRegister(irCode.right.name);
+                                asm.push(`    movq $${irCode.left.value}, %rax`);
+                                asm.push('    cqto');
+                                asm.push(`    idivq ${register}`);
+                                asm.push(`    movq %rax, ${register}`);
+                                tmpSymbols.replaceTmpName(irCode.right.name, irCode.result.name);
+                                break;
                             }
                             if (
                                 irCode.left.type === ValueType.Tmp
                                 && irCode.right.type === ValueType.Imm
                             ) {
-                                // todo
+                                const register = tmpSymbols.getTmpRegister(irCode.left.name);
+                                asm.push(`    movq ${register}, %rax`);
+                                asm.push(`    movq $${irCode.right.value}, ${register}`);
+                                asm.push('    cqto');
+                                asm.push(`    idivq ${register}`);
+                                asm.push(`    movq %rax, ${register}`);
+                                tmpSymbols.replaceTmpName(irCode.left.name, irCode.result.name);
+                                break;
                             }
                             if (
                                 irCode.left.type === ValueType.Tmp
                                 && irCode.right.type === ValueType.Identifier
                             ) {
-                                // todo
+                                const register = tmpSymbols.getTmpRegister(irCode.left.name);
+                                asm.push(`    movq ${register}, %rax`);
+                                asm.push(`    movq ${getIdentifierValue(irCode.right)}, ${register}`);
+                                asm.push('    cqto');
+                                asm.push(`    idivq ${register}`);
+                                asm.push(`    movq %rax, ${register}`);
+                                tmpSymbols.replaceTmpName(irCode.left.name, irCode.result.name);
+                                break;
                             }
                             if (
                                 irCode.left.type === ValueType.Identifier
                                 && irCode.right.type === ValueType.Tmp
                             ) {
-                                // todo
+                                const register = tmpSymbols.getTmpRegister(irCode.right.name);
+                                asm.push(`    movq ${getIdentifierValue(irCode.left)}, %rax`);
+                                asm.push('    cqto');
+                                asm.push(`    idivq ${register}`);
+                                asm.push(`    movq %rax, ${register}`);
+                                tmpSymbols.replaceTmpName(irCode.right.name, irCode.result.name);
+                                break;
                             }
-                            break;
-
+                            if (
+                                irCode.left.type === ValueType.Tmp
+                                && irCode.right.type === ValueType.Tmp
+                            ) {
+                                const register = tmpSymbols.getTmpRegister(irCode.right.name);
+                                asm.push(`    movq ${tmpSymbols.getTmpRegister(irCode.left.name)}, %rax`);
+                                asm.push('    cqto');
+                                asm.push(`    idivq ${register}`);
+                                asm.push(`    movq %rax, ${register}`);
+                                tmpSymbols.replaceTmpName(irCode.right.name, irCode.result.name);
+                                tmpSymbols.freeRegister(tmpSymbols.getTmpRegister(irCode.left.name));
+                                break;
+                            }
+                            if (
+                                irCode.left.type === ValueType.Parameter
+                                && irCode.right.type === ValueType.Parameter
+                            ) {
+                                const register = tmpSymbols.allocateTmp(irCode.result.name);
+                                const leftPos = irCode.left.index >= 6
+                                    ? `${(irCode.left.index - 4) * 8}(%rbp)`
+                                    : `${method.parameters.get(irCode.left.name)!.offset}(%rbp)`;
+                                const rightPos = irCode.right.index >= 6
+                                    ? `${(irCode.right.index - 4) * 8}(%rbp)`
+                                    : `${method.parameters.get(irCode.right.name)!.offset}(%rbp)`;
+                                asm.push(`    movq ${leftPos}, %rax`);
+                                asm.push(`    movq ${rightPos}, ${register}`);
+                                asm.push('    cqto');
+                                asm.push(`    idivq ${register}`);
+                                asm.push(`    movq %rax, ${register}`);
+                                break;
+                            }
+                            if (
+                                irCode.left.type === ValueType.Tmp
+                                && irCode.right.type === ValueType.Parameter
+                            ) {
+                                const register = tmpSymbols.getTmpRegister(irCode.left.name);
+                                const rightPos = irCode.right.index >= 6
+                                    ? `${(irCode.right.index - 4) * 8}(%rbp)`
+                                    : `${method.parameters.get(irCode.right.name)!.offset}(%rbp)`;
+                                asm.push(`    movq ${register}, %rax`);
+                                asm.push(`    movq ${rightPos}, ${register}`);
+                                asm.push('    cqto');
+                                asm.push(`    idivq ${register}`);
+                                asm.push(`    movq %rax, ${register}`);
+                                tmpSymbols.replaceTmpName(irCode.left.name, irCode.result.name);
+                                break;
+                            }
+                            if (
+                                irCode.left.type === ValueType.Parameter
+                                && irCode.right.type === ValueType.Tmp
+                            ) {
+                                const register = tmpSymbols.getTmpRegister(irCode.right.name);
+                                const leftPos = irCode.left.index >= 6
+                                    ? `${(irCode.left.index - 4) * 8}(%rbp)`
+                                    : `${method.parameters.get(irCode.left.name)!.offset}(%rbp)`;
+                                asm.push(`    movq ${leftPos}, %rax`);
+                                asm.push('    cqto');
+                                asm.push(`    idivq ${register}`);
+                                asm.push(`    movq %rax, ${register}`);
+                                tmpSymbols.replaceTmpName(irCode.right.name, irCode.result.name);
+                                break;
+                            }
+                            if (
+                                irCode.left.type === ValueType.Imm
+                                && irCode.right.type === ValueType.Parameter
+                            ) {
+                                const register = tmpSymbols.allocateTmp(irCode.result.name);
+                                const rightPos = irCode.right.index >= 6
+                                    ? `${(irCode.right.index - 4) * 8}(%rbp)`
+                                    : `${method.parameters.get(irCode.right.name)!.offset}(%rbp)`;
+                                asm.push(`    movq $${irCode.left.value}, %rax`);
+                                asm.push(`    movq ${rightPos}, ${register}`);
+                                asm.push('    cqto');
+                                asm.push(`    idivq ${register}`);
+                                asm.push(`    movq %rax, ${register}`);
+                                break;
+                            }
+                            if (
+                                irCode.left.type === ValueType.Parameter
+                                && irCode.right.type === ValueType.Imm
+                            ) {
+                                const register = tmpSymbols.allocateTmp(irCode.result.name);
+                                const leftPos = irCode.left.index >= 6
+                                    ? `${(irCode.left.index - 4) * 8}(%rbp)`
+                                    : `${method.parameters.get(irCode.left.name)!.offset}(%rbp)`;
+                                asm.push(`    movq ${leftPos}, %rax`);
+                                asm.push(`    movq $${irCode.right.value}, ${register}`);
+                                asm.push('    cqto');
+                                asm.push(`    idivq ${register}`);
+                                asm.push(`    movq %rax, ${register}`);
+                                break;
+                            }
+                            if (
+                                irCode.left.type === ValueType.Parameter
+                                && irCode.right.type === ValueType.Identifier
+                            ) {
+                                const register = tmpSymbols.allocateTmp(irCode.result.name);
+                                const leftPos = irCode.left.index >= 6
+                                    ? `${(irCode.left.index - 4) * 8}(%rbp)`
+                                    : `${method.parameters.get(irCode.left.name)!.offset}(%rbp)`;
+                                const rightPos = getIdentifierValue(irCode.right);
+                                asm.push(`    movq ${leftPos}, %rax`);
+                                asm.push(`    movq ${rightPos}, ${register}`);
+                                asm.push('    cqto');
+                                asm.push(`    idivq ${register}`);
+                                asm.push(`    movq %rax, ${register}`);
+                                break;
+                            }
+                            if (
+                                irCode.left.type === ValueType.Identifier
+                                && irCode.right.type === ValueType.Parameter
+                            ) {
+                                const register = tmpSymbols.allocateTmp(irCode.result.name);
+                                const leftPos = getIdentifierValue(irCode.left);
+                                const rightPos = irCode.right.index >= 6
+                                    ? `${(irCode.right.index - 4) * 8}(%rbp)`
+                                    : `${method.parameters.get(irCode.right.name)!.offset}(%rbp)`;
+                                asm.push(`    movq ${leftPos}, %rax`);
+                                asm.push(`    movq ${rightPos}, ${register}`);
+                                asm.push('    cqto');
+                                asm.push(`    idivq ${register}`);
+                                asm.push(`    movq %rax, ${register}`);
+                                break;
+                            }
+                            throw new Error('todo');
                         }
                         case SyntaxKind.PercentToken:
                         {
@@ -728,7 +1133,7 @@ export function genAssembly(ast: ProgramNode) {
                             ) {
                                 const register = tmpSymbols.allocateTmp(irCode.result.name);
                                 asm.push(`    movq ${getIdentifierValue(irCode.left)}, %rax`);
-                                asm.push(`    movq  ${getIdentifierValue(irCode.right)}, ${register}`);
+                                asm.push(`    movq ${getIdentifierValue(irCode.right)} ${register}`);
                                 asm.push('    cqto');
                                 asm.push(`    idivq ${register}`);
                                 asm.push(`    movq %rdx, ${register}`);
@@ -738,7 +1143,13 @@ export function genAssembly(ast: ProgramNode) {
                                 irCode.left.type === ValueType.Imm
                                 && irCode.right.type === ValueType.Identifier
                             ) {
-                                // todo
+                                const register = tmpSymbols.allocateTmp(irCode.result.name);
+                                asm.push(`    movq $${irCode.left.value}, %rax`);
+                                asm.push(`    movq ${getIdentifierValue(irCode.right)} ${register}`);
+                                asm.push('    cqto');
+                                asm.push(`    idivq ${register}`);
+                                asm.push(`    movq %rdx, ${register}`);
+                                break;
                             }
                             if (
                                 irCode.left.type === ValueType.Identifier
@@ -756,27 +1167,177 @@ export function genAssembly(ast: ProgramNode) {
                                 irCode.left.type === ValueType.Imm
                                 && irCode.right.type === ValueType.Tmp
                             ) {
-                                // todo
+                                const register = tmpSymbols.getTmpRegister(irCode.right.name);
+                                asm.push(`    movq $${irCode.left.value}, %rax`);
+                                asm.push('    cqto');
+                                asm.push(`    idivq ${register}`);
+                                asm.push(`    movq %rdx, ${register}`);
+                                tmpSymbols.replaceTmpName(irCode.right.name, irCode.result.name);
+                                break;
                             }
                             if (
                                 irCode.left.type === ValueType.Tmp
                                 && irCode.right.type === ValueType.Imm
                             ) {
-                                // todo
+                                const register = tmpSymbols.getTmpRegister(irCode.left.name);
+                                asm.push(`    movq ${register}, %rax`);
+                                asm.push(`    movq $${irCode.right.value}, ${register}`);
+                                asm.push('    cqto');
+                                asm.push(`    idivq ${register}`);
+                                asm.push(`    movq %rdx, ${register}`);
+                                tmpSymbols.replaceTmpName(irCode.left.name, irCode.result.name);
+                                break;
                             }
                             if (
                                 irCode.left.type === ValueType.Tmp
                                 && irCode.right.type === ValueType.Identifier
                             ) {
-                                // todo
+                                const register = tmpSymbols.getTmpRegister(irCode.left.name);
+                                asm.push(`    movq ${register}, %rax`);
+                                asm.push(`    movq ${getIdentifierValue(irCode.right)}, ${register}`);
+                                asm.push('    cqto');
+                                asm.push(`    idivq ${register}`);
+                                asm.push(`    movq %rdx, ${register}`);
+                                tmpSymbols.replaceTmpName(irCode.left.name, irCode.result.name);
+                                break;
                             }
                             if (
                                 irCode.left.type === ValueType.Identifier
                                 && irCode.right.type === ValueType.Tmp
                             ) {
-                                // todo
+                                const register = tmpSymbols.getTmpRegister(irCode.right.name);
+                                asm.push(`    movq ${getIdentifierValue(irCode.left)}, %rax`);
+                                asm.push('    cqto');
+                                asm.push(`    idivq ${register}`);
+                                asm.push(`    movq %rdx, ${register}`);
+                                tmpSymbols.replaceTmpName(irCode.right.name, irCode.result.name);
+                                break;
                             }
-                            break;
+                            if (
+                                irCode.left.type === ValueType.Tmp
+                                && irCode.right.type === ValueType.Tmp
+                            ) {
+                                const register = tmpSymbols.getTmpRegister(irCode.right.name);
+                                asm.push(`    movq ${tmpSymbols.getTmpRegister(irCode.left.name)}, %rax`);
+                                asm.push('    cqto');
+                                asm.push(`    idivq ${register}`);
+                                asm.push(`    movq %rdx, ${register}`);
+                                tmpSymbols.replaceTmpName(irCode.right.name, irCode.result.name);
+                                tmpSymbols.freeRegister(tmpSymbols.getTmpRegister(irCode.left.name));
+                                break;
+                            }
+                            if (
+                                irCode.left.type === ValueType.Parameter
+                                && irCode.right.type === ValueType.Parameter
+                            ) {
+                                const register = tmpSymbols.allocateTmp(irCode.result.name);
+                                const leftPos = irCode.left.index >= 6
+                                    ? `${(irCode.left.index - 4) * 8}(%rbp)`
+                                    : `${method.parameters.get(irCode.left.name)!.offset}(%rbp)`;
+                                const rightPos = irCode.right.index >= 6
+                                    ? `${(irCode.right.index - 4) * 8}(%rbp)`
+                                    : `${method.parameters.get(irCode.right.name)!.offset}(%rbp)`;
+                                asm.push(`    movq ${leftPos}, %rax`);
+                                asm.push(`    movq ${rightPos}, ${register}`);
+                                asm.push('    cqto');
+                                asm.push(`    idivq ${register}`);
+                                asm.push(`    movq %rdx, ${register}`);
+                                break;
+                            }
+                            if (
+                                irCode.left.type === ValueType.Tmp
+                                && irCode.right.type === ValueType.Parameter
+                            ) {
+                                const register = tmpSymbols.getTmpRegister(irCode.left.name);
+                                const rightPos = irCode.right.index >= 6
+                                    ? `${(irCode.right.index - 4) * 8}(%rbp)`
+                                    : `${method.parameters.get(irCode.right.name)!.offset}(%rbp)`;
+                                asm.push(`    movq ${register}, %rax`);
+                                asm.push(`    movq ${rightPos}, ${register}`);
+                                asm.push('    cqto');
+                                asm.push(`    idivq ${register}`);
+                                asm.push(`    movq %rdx, ${register}`);
+                                tmpSymbols.replaceTmpName(irCode.left.name, irCode.result.name);
+                                break;
+                            }
+                            if (
+                                irCode.left.type === ValueType.Parameter
+                                && irCode.right.type === ValueType.Tmp
+                            ) {
+                                const register = tmpSymbols.getTmpRegister(irCode.right.name);
+                                const leftPos = irCode.left.index >= 6
+                                    ? `${(irCode.left.index - 4) * 8}(%rbp)`
+                                    : `${method.parameters.get(irCode.left.name)!.offset}(%rbp)`;
+                                asm.push(`    movq ${leftPos}, %rax`);
+                                asm.push('    cqto');
+                                asm.push(`    idivq ${register}`);
+                                asm.push(`    movq %rdx, ${register}`);
+                                tmpSymbols.replaceTmpName(irCode.right.name, irCode.result.name);
+                                break;
+                            }
+                            if (
+                                irCode.left.type === ValueType.Imm
+                                && irCode.right.type === ValueType.Parameter
+                            ) {
+                                const register = tmpSymbols.allocateTmp(irCode.result.name);
+                                const rightPos = irCode.right.index >= 6
+                                    ? `${(irCode.right.index - 4) * 8}(%rbp)`
+                                    : `${method.parameters.get(irCode.right.name)!.offset}(%rbp)`;
+                                asm.push(`    movq $${irCode.left.value}, %rax`);
+                                asm.push(`    movq ${rightPos}, ${register}`);
+                                asm.push('    cqto');
+                                asm.push(`    idivq ${register}`);
+                                asm.push(`    movq %rdx, ${register}`);
+                                break;
+                            }
+                            if (
+                                irCode.left.type === ValueType.Parameter
+                                && irCode.right.type === ValueType.Imm
+                            ) {
+                                const register = tmpSymbols.allocateTmp(irCode.result.name);
+                                const leftPos = irCode.left.index >= 6
+                                    ? `${(irCode.left.index - 4) * 8}(%rbp)`
+                                    : `${method.parameters.get(irCode.left.name)!.offset}(%rbp)`;
+                                asm.push(`    movq ${leftPos}, %rax`);
+                                asm.push(`    movq $${irCode.right.value}, ${register}`);
+                                asm.push('    cqto');
+                                asm.push(`    idivq ${register}`);
+                                asm.push(`    movq %rdx, ${register}`);
+                                break;
+                            }
+                            if (
+                                irCode.left.type === ValueType.Parameter
+                                && irCode.right.type === ValueType.Identifier
+                            ) {
+                                const register = tmpSymbols.allocateTmp(irCode.result.name);
+                                const leftPos = irCode.left.index >= 6
+                                    ? `${(irCode.left.index - 4) * 8}(%rbp)`
+                                    : `${method.parameters.get(irCode.left.name)!.offset}(%rbp)`;
+                                const rightPos = getIdentifierValue(irCode.right);
+                                asm.push(`    movq ${leftPos}, %rax`);
+                                asm.push(`    movq ${rightPos}, ${register}`);
+                                asm.push('    cqto');
+                                asm.push(`    idivq ${register}`);
+                                asm.push(`    movq %rdx, ${register}`);
+                                break;
+                            }
+                            if (
+                                irCode.left.type === ValueType.Identifier
+                                && irCode.right.type === ValueType.Parameter
+                            ) {
+                                const register = tmpSymbols.allocateTmp(irCode.result.name);
+                                const leftPos = getIdentifierValue(irCode.left);
+                                const rightPos = irCode.right.index >= 6
+                                    ? `${(irCode.right.index - 4) * 8}(%rbp)`
+                                    : `${method.parameters.get(irCode.right.name)!.offset}(%rbp)`;
+                                asm.push(`    movq ${leftPos}, %rax`);
+                                asm.push(`    movq ${rightPos}, ${register}`);
+                                asm.push('    cqto');
+                                asm.push(`    idivq ${register}`);
+                                asm.push(`    movq %rdx, ${register}`);
+                                break;
+                            }
+                            throw new Error('todo');
                         }
                     }
 
@@ -801,61 +1362,149 @@ export function genAssembly(ast: ProgramNode) {
                         irCode.left.type === ValueType.Identifier
                         && irCode.right.type === ValueType.Identifier
                     ) {
-                        const register = tmpSymbols.allocateTmp(irCode.left.name);
-                        asm.push(`    movq ${getIdentifierValue(irCode.left)}, ${register}`);
-                        asm.push(`    cmpq  ${getIdentifierValue(irCode.right)}, ${register}`);
+                        asm.push(`    movq ${getIdentifierValue(irCode.left)}, %r13`);
+                        asm.push(`    cmpq ${getIdentifierValue(irCode.right)}, %r13`);
                     }
                     if (
                         irCode.left.type === ValueType.Identifier
                         && irCode.right.type === ValueType.Imm
                     ) {
-                        const register = tmpSymbols.allocateTmp(irCode.left.name);
-                        asm.push(`    movq ${getIdentifierValue(irCode.left)}, ${register}`);
-                        asm.push(`    cmpq $${irCode.right.value}, ${register}`);
+                        asm.push(`    movq ${getIdentifierValue(irCode.left)}, %r13`);
+                        asm.push(`    cmpq $${irCode.right.value}, %r13`);
+                    }
+                    if (
+                        irCode.left.type === ValueType.Imm
+                        && irCode.right.type === ValueType.Identifier
+                    ) {
+                        asm.push(`    movq $${irCode.left.value}, %r13`);
+                        asm.push(`    cmpq ${getIdentifierValue(irCode.right)}, %r13`);
                     }
                     if (
                         irCode.left.type === ValueType.Imm
                         && irCode.right.type === ValueType.Imm
                     ) {
-                        const register = tmpSymbols.allocateTmp('');
-                        asm.push(`    movq $${irCode.left.value}, ${register}`);
-                        asm.push(`    cmpq $${irCode.right.value}, ${register}`);
+                        asm.push(`    movq $${irCode.left.value}, %r13`);
+                        asm.push(`    cmpq $${irCode.right.value}, %r13`);
                     }
                     if (
                         irCode.left.type === ValueType.Parameter
                         && irCode.right.type === ValueType.Imm
                     ) {
-                        const register = tmpSymbols.allocateTmp('');
                         const leftPos = irCode.left.index >= 6
                             ? `${(irCode.left.index - 4) * 8}(%rbp)`
                             : `${method.parameters.get(irCode.left.name)!.offset}(%rbp)`;
-                        asm.push(`    movq ${leftPos}, ${register}`);
-                        asm.push(`    cmpq $${irCode.right.value}, ${register}`);
+                        asm.push(`    movq ${leftPos}, %r13`);
+                        asm.push(`    cmpq $${irCode.right.value}, %r13`);
                     }
                     if (
                         irCode.left.type === ValueType.Imm
                         && irCode.right.type === ValueType.Parameter
                     ) {
-                        const register = tmpSymbols.allocateTmp('');
                         const rightPos = irCode.right.index >= 6
                             ? `${(irCode.right.index - 4) * 8}(%rbp)`
                             : `${method.parameters.get(irCode.right.name)!.offset}(%rbp)`;
-                        asm.push(`    movq $${irCode.left.value}, ${register}`);
-                        asm.push(`    cmpq ${rightPos}, ${register}`);
+                        asm.push(`    movq $${irCode.left.value}, %r13`);
+                        asm.push(`    cmpq ${rightPos}, %r13`);
                     }
                     if (
                         irCode.left.type === ValueType.Parameter
                         && irCode.right.type === ValueType.Parameter
                     ) {
-                        const register = tmpSymbols.allocateTmp('');
                         const leftPos = irCode.left.index >= 6
                             ? `${(irCode.left.index - 4) * 8}(%rbp)`
                             : `${method.parameters.get(irCode.left.name)!.offset}(%rbp)`;
                         const rightPos = irCode.right.index >= 6
                             ? `${(irCode.right.index - 4) * 8}(%rbp)`
                             : `${method.parameters.get(irCode.right.name)!.offset}(%rbp)`;
-                        asm.push(`    movq ${leftPos}, ${register}`);
-                        asm.push(`    cmpq ${rightPos}, ${register}`);
+                        asm.push(`    movq ${leftPos}, %r13`);
+                        asm.push(`    cmpq ${rightPos}, %r13`);
+                    }
+                    if (
+                        irCode.left.type === ValueType.Tmp
+                        && irCode.right.type === ValueType.Tmp
+                    ) {
+                        const leftRegister = tmpSymbols.getTmpRegister(irCode.left.name);
+                        const rightRegister = tmpSymbols.getTmpRegister(irCode.right.name);
+                        asm.push(`    cmpq ${rightRegister}, ${leftRegister}`);
+                        tmpSymbols.freeRegister(leftRegister);
+                        tmpSymbols.freeRegister(rightRegister);
+                    }
+                    if (
+                        irCode.left.type === ValueType.Identifier
+                        && irCode.right.type === ValueType.Tmp
+                    ) {
+                        const rightRegister = tmpSymbols.getTmpRegister(irCode.right.name);
+                        asm.push(`    movq ${getIdentifierValue(irCode.left)}, %r13`);
+                        asm.push(`    cmpq ${rightRegister}, %r13`);
+                        tmpSymbols.freeRegister(rightRegister);
+                    }
+                    if (
+                        irCode.left.type === ValueType.Tmp
+                        && irCode.right.type === ValueType.Identifier
+                    ) {
+                        const leftRegister = tmpSymbols.getTmpRegister(irCode.left.name);
+                        asm.push(`    cmpq ${getIdentifierValue(irCode.right)}, ${leftRegister}`);
+                        tmpSymbols.freeRegister(leftRegister);
+                    }
+                    if (
+                        irCode.left.type === ValueType.Tmp
+                        && irCode.right.type === ValueType.Imm
+                    ) {
+                        const leftRegister = tmpSymbols.getTmpRegister(irCode.left.name);
+                        asm.push(`    cmpq $${irCode.right.value}, ${leftRegister}`);
+                        tmpSymbols.freeRegister(leftRegister);
+                    }
+                    if (
+                        irCode.left.type === ValueType.Imm
+                        && irCode.right.type === ValueType.Tmp
+                    ) {
+                        const rightRegister = tmpSymbols.getTmpRegister(irCode.right.name);
+                        asm.push(`    movq $${irCode.left.value}, %r13`);
+                        asm.push(`    cmpq ${rightRegister}, %r13`);
+                        tmpSymbols.freeRegister(rightRegister);
+                    }
+                    if (
+                        irCode.left.type === ValueType.Parameter
+                        && irCode.right.type === ValueType.Identifier
+                    ) {
+                        const leftPos = irCode.left.index >= 6
+                            ? `${(irCode.left.index - 4) * 8}(%rbp)`
+                            : `${method.parameters.get(irCode.left.name)!.offset}(%rbp)`;
+                        asm.push(`    movq ${leftPos}, %r13`);
+                        asm.push(`    cmpq ${getIdentifierValue(irCode.right)}, %r13`);
+                    }
+                    if (
+                        irCode.left.type === ValueType.Identifier
+                        && irCode.right.type === ValueType.Parameter
+                    ) {
+                        const rightPos = irCode.right.index >= 6
+                            ? `${(irCode.right.index - 4) * 8}(%rbp)`
+                            : `${method.parameters.get(irCode.right.name)!.offset}(%rbp)`;
+                        asm.push(`    movq ${getIdentifierValue(irCode.left)}, %r13`);
+                        asm.push(`    cmpq ${rightPos}, %r13`);
+                    }
+                    if (
+                        irCode.left.type === ValueType.Parameter
+                        && irCode.right.type === ValueType.Tmp
+                    ) {
+                        const leftPos = irCode.left.index >= 6
+                            ? `${(irCode.left.index - 4) * 8}(%rbp)`
+                            : `${method.parameters.get(irCode.left.name)!.offset}(%rbp)`;
+                        const rightRegister = tmpSymbols.getTmpRegister(irCode.right.name);
+                        asm.push(`    movq ${leftPos}, %r13`);
+                        asm.push(`    cmpq ${rightRegister}, %r13`);
+                        tmpSymbols.freeRegister(rightRegister);
+                    }
+                    if (
+                        irCode.left.type === ValueType.Tmp
+                        && irCode.right.type === ValueType.Parameter
+                    ) {
+                        const rightPos = irCode.right.index >= 6
+                            ? `${(irCode.right.index - 4) * 8}(%rbp)`
+                            : `${method.parameters.get(irCode.right.name)!.offset}(%rbp)`;
+                        const leftRegister = tmpSymbols.getTmpRegister(irCode.left.name);
+                        asm.push(`    cmpq ${rightPos}, ${leftRegister}`);
+                        tmpSymbols.freeRegister(leftRegister);
                     }
                     switch (irCode.operator) {
                         case SyntaxKind.GreaterThanEqualsToken:
@@ -975,7 +1624,7 @@ export function genAssembly(ast: ProgramNode) {
     }
 
     ir.globals.forEach(item => {
-        asm.push(`.comm ${item.name}, 8, ${item.size}`);
+        asm.push(`.comm ${item.name}, ${item.size}, 8`);
     });
 
     asm.push('');
