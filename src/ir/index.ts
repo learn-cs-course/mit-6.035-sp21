@@ -5,9 +5,6 @@
 import {
     ProgramNode,
     SyntaxKind,
-    Type,
-    IRCodeType,
-    VariableDeclarationNode,
     MethodDeclarationNode,
     BlockNode,
     ExpressionNode,
@@ -20,7 +17,34 @@ import {
     AssignmentStatementNode,
     IdentifierNode,
 } from '../types/grammar';
+import {createFieldSymbol} from './createFieldSymbol';
+import {
+    ImmValue,
+    ValueType,
+    ArgumentIRCode,
+    createArgumentIRCode,
+    IdentifierValue,
+    createAssignIRCode,
+    AssignmentIRCodeRigntValue,
+    createBinaryIRCode,
+    createConditionalJumpIRCode,
+    createJumpIRCode,
+    createLabelIRCode,
+    createUnaryIRCode,
+    createCallIRCode,
+    ArrayLocationValue,
+    createArrayLocationIRCode,
+    LabelIRCode,
+    createEnterIRCode,
+    ParameterValue,
+    createReturnIRCode,
+    createFunctionReturnCheckIRCode,
+    createExitIRCode,
+} from './irCode';
+import {ProgramIR, Method, ParameterInMethod} from './ProgramIR';
+import {StringConstantsPool} from './StringConstantsPool';
 import {SymbolTable} from './symbolTable';
+import {optimaze} from './optimaze';
 
 /**
  * 在写这部分的时候我非常想重构 interpreter，主要是想把类型再搞一搞
@@ -33,336 +57,6 @@ class JumpLabels {
     getLabel() {
         return `.Label${this.labelId++}`;
     }
-}
-
-const globalLabels = new JumpLabels();
-
-type IRPlainCode = EnterIRCode
-    | ReturnIRCode
-    | ExitIRCode
-    | CallIRCode
-    | ArgumentIRCode
-    | AssignIRCode
-    | UnaryIRCode
-    | BinaryIRCode
-    | LabelIRCode
-    | ConditionalJumpIRCode
-    | JumpIRCode
-    | ArrayLocationIRCode
-    | FunctionReturnCheckIRCode;
-
-interface EnterIRCode {
-    type: IRCodeType.enter;
-}
-
-function createEnterIRCode(): EnterIRCode {
-    return {type: IRCodeType.enter};
-}
-
-interface ReturnIRCode {
-    type: IRCodeType.return;
-    value?: ImmValue | TmpValue | IdentifierValue;
-}
-
-function createReturnIRCode(value?: ImmValue | TmpValue | IdentifierValue): ReturnIRCode {
-    return {
-        type: IRCodeType.return,
-        value,
-    };
-}
-
-interface ExitIRCode {
-    type: IRCodeType.exit;
-}
-
-function createExitIRCode(): ExitIRCode {
-    return {type: IRCodeType.exit};
-}
-
-interface CallIRCode {
-    type: IRCodeType.call;
-    name: string;
-    length: number;
-}
-
-function createCallIRCode(name: string, length: number): CallIRCode {
-    return {
-        type: IRCodeType.call,
-        name,
-        length,
-    };
-}
-
-export const enum ValueType {
-    // 立即数
-    Imm,
-    // 临时变量
-    Tmp,
-    // 标识符
-    Identifier,
-    // 数组元素
-    ArrayLocation,
-    // 函数参数
-    Parameter,
-}
-
-interface StringLiteralArgumentIRCode {
-    type: IRCodeType.argument;
-    kind: SyntaxKind.StringLiteral;
-    label: string;
-}
-
-export interface IdentifierArgumentIRCode {
-    type: IRCodeType.argument;
-    kind: ValueType.Identifier;
-    value: IdentifierValue;
-}
-
-interface LiteralArgumentIRCode {
-    type: IRCodeType.argument;
-    kind: ValueType.Imm;
-    value: ImmValue;
-}
-
-interface TmpArgumentIRCode {
-    type: IRCodeType.argument;
-    kind: ValueType.Tmp;
-    value: TmpValue;
-}
-
-interface ParameterArgumentIRCode {
-    type: IRCodeType.argument;
-    kind: ValueType.Parameter;
-    value: ParameterValue;
-}
-
-export type ArgumentIRCode = StringLiteralArgumentIRCode
-    | IdentifierArgumentIRCode | LiteralArgumentIRCode
-    | TmpArgumentIRCode | ParameterArgumentIRCode;
-
-function createArgumentIRCode(
-    value: string | AssignmentIRCodeRigntValue
-): ArgumentIRCode {
-    if (typeof value === 'string') {
-        return {
-            type: IRCodeType.argument,
-            kind: SyntaxKind.StringLiteral,
-            label: value,
-        };
-    }
-    return {
-        type: IRCodeType.argument,
-        kind: value.type,
-        // @ts-expect-error
-        value,
-    };
-}
-
-interface ImmValue {
-    type: ValueType.Imm;
-    value: number;
-}
-
-interface TmpValue {
-    type: ValueType.Tmp;
-    name: string;
-}
-
-export interface IdentifierValue {
-    type: ValueType.Identifier;
-    name: string;
-    offset: number;
-}
-
-interface ParameterValue {
-    type: ValueType.Parameter;
-    name: string;
-    index: number;
-}
-
-interface ArrayLocationValue {
-    type: ValueType.ArrayLocation;
-    name: string;
-    index: ImmValue | TmpValue | IdentifierValue | ParameterValue;
-    typeSize: number;
-    length: number;
-    methodName: string;
-    methodNameLength: number;
-    offset: number;
-}
-
-type AssignmentIRCodeRigntValue = ImmValue | TmpValue | IdentifierValue | ParameterValue;
-
-interface AssignIRCode {
-    type: IRCodeType.assign;
-    left: IdentifierValue | ParameterValue | ArrayLocationValue;
-    right: AssignmentIRCodeRigntValue;
-}
-
-function createAssignIRCode(
-    left: IdentifierValue | ParameterValue | ArrayLocationValue,
-    right: AssignmentIRCodeRigntValue
-): AssignIRCode {
-    return {
-        type: IRCodeType.assign,
-        left,
-        right,
-    };
-}
-
-interface UnaryIRCode {
-    type: IRCodeType.unary;
-    operator: UnaryOperator;
-    result: TmpValue;
-    operand: TmpValue | ImmValue | IdentifierValue | ParameterValue;
-}
-
-function createUnaryIRCode(
-    operator: UnaryOperator,
-    result: TmpValue,
-    operand: TmpValue | ImmValue | IdentifierValue | ParameterValue
-): UnaryIRCode {
-    return {
-        type: IRCodeType.unary,
-        operator,
-        result,
-        operand,
-    };
-}
-
-interface BinaryIRCode {
-    type: IRCodeType.binary;
-    operator: BinaryOperator;
-    result: TmpValue;
-    left: TmpValue | ImmValue | IdentifierValue | ParameterValue;
-    right: TmpValue | ImmValue | IdentifierValue | ParameterValue;
-}
-
-function createBinaryIRCode(
-    operator: BinaryOperator,
-    result: TmpValue,
-    left: TmpValue | ImmValue | IdentifierValue | ParameterValue,
-    right: TmpValue | ImmValue | IdentifierValue | ParameterValue
-): BinaryIRCode {
-    return {
-        type: IRCodeType.binary,
-        operator,
-        result,
-        left,
-        right,
-    };
-}
-
-interface LabelIRCode {
-    type: IRCodeType.label;
-    label: string;
-}
-
-function createLabelIRCode(label: string): LabelIRCode {
-    return {
-        type: IRCodeType.label,
-        label,
-    };
-}
-
-interface ConditionalJumpIRCode {
-    type: IRCodeType.conditionalJump;
-    operator: BinaryOperator;
-    left: TmpValue | ImmValue | IdentifierValue | ParameterValue;
-    right: TmpValue | ImmValue | IdentifierValue | ParameterValue;
-    targetLabel: string;
-}
-
-function createConditionalJumpIRCode(
-    operator: BinaryOperator,
-    left: TmpValue | ImmValue | IdentifierValue | ParameterValue,
-    right: TmpValue | ImmValue | IdentifierValue | ParameterValue,
-    targetLabel: string
-): ConditionalJumpIRCode {
-    return {
-        type: IRCodeType.conditionalJump,
-        operator,
-        left,
-        right,
-        targetLabel,
-    };
-}
-
-interface JumpIRCode {
-    type: IRCodeType.jump;
-    targetLabel: string;
-}
-
-function createJumpIRCode(
-    targetLabel: string
-): JumpIRCode {
-    return {
-        type: IRCodeType.jump,
-        targetLabel,
-    };
-}
-
-interface ArrayLocationIRCode {
-    type: IRCodeType.arrayLocation;
-    location: ArrayLocationValue;
-    result: TmpValue;
-}
-
-function createArrayLocationIRCode(
-    location: ArrayLocationValue,
-    result: TmpValue
-): ArrayLocationIRCode {
-    return {
-        type: IRCodeType.arrayLocation,
-        location,
-        result,
-    };
-}
-
-interface FunctionReturnCheckIRCode {
-    type: IRCodeType.functionReturnCheck;
-    methodName: string;
-    methodNameLength: number;
-}
-
-function createFunctionReturnCheckIRCode(
-    methodName: string,
-    methodNameLength: number
-): FunctionReturnCheckIRCode {
-    return {
-        type: IRCodeType.functionReturnCheck,
-        methodName,
-        methodNameLength,
-    };
-}
-
-interface FieldSymbol {
-    name: string;
-    typeSize: number;
-    size: number;
-}
-
-function createFieldSymbol(node: VariableDeclarationNode): FieldSymbol {
-    if (node.kind === SyntaxKind.Identifier) {
-        // @todo 处理数据类型
-        // bool 类型 1 byte，int 类型 8 byte，其他情况这里不存在
-        const size = node.nodeType === Type.Bool ? 8 : 8;
-        return {
-            name: node.name,
-            typeSize: size,
-            size,
-        };
-    }
-    // 这里是 array
-    // @todo 处理数据类型
-    const singleItemSize = node.nodeType === Type.BoolArray ? 8 : 8;
-    const radix = node.size.value.startsWith('0x') ? 16 : 10;
-    const size = singleItemSize * parseInt(node.size.value, radix);
-    return {
-        name: node.name.name,
-        typeSize: singleItemSize,
-        size,
-    };
 }
 
 function calcBinaryExpression(
@@ -415,49 +109,6 @@ function calcUnaryExpression(
     }
 }
 
-export interface ProgramIR {
-    globals: FieldSymbol[];
-    constants: StringConstantsPool;
-    methods: Method[];
-    enableArrayBoundCheck: boolean;
-    enableReturnCheck: boolean;
-}
-
-interface ParameterInMethod {
-    size: number;
-    offset: number;
-}
-
-interface Method {
-    name: string;
-    parameters: Map<string, ParameterInMethod>;
-    codes: IRPlainCode[];
-    localSize: number;
-    enableReturnCheck: boolean;
-}
-
-class StringConstantsPool {
-
-    private readonly map = new Map<string, number>();
-
-    get size() {
-        return this.map.size;
-    }
-
-    getLabel(stringLiteral: string): string {
-        if (this.map.has(stringLiteral)) {
-            return `.msg${this.map.get(stringLiteral)}`;
-        }
-        this.map.set(stringLiteral, this.map.size);
-        return `.msg${this.map.size - 1}`;
-    }
-
-    entries() {
-        return this.map.entries();
-    }
-
-}
-
 export function genIR(ast: ProgramNode) {
     const programIR: ProgramIR = {
         globals: [],
@@ -466,6 +117,8 @@ export function genIR(ast: ProgramNode) {
         enableArrayBoundCheck: false,
         enableReturnCheck: false,
     };
+
+    const globalLabels = new JumpLabels();
 
     const symbolTable = new SymbolTable();
     symbolTable.enterScope('global');
@@ -1617,6 +1270,8 @@ export function genIR(ast: ProgramNode) {
     });
 
     symbolTable.exitScope();
+
+    optimaze(programIR);
 
     return programIR;
 }

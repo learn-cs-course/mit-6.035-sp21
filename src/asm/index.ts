@@ -3,7 +3,8 @@
  */
 
 import {ProgramNode, IRCodeType, SyntaxKind} from '../types/grammar';
-import {genIR, ValueType, ArgumentIRCode, IdentifierValue} from '../ir';
+import {genIR} from '../ir';
+import {ValueType, ArgumentIRCode, IdentifierValue} from '../ir/irCode';
 
 class TmpSymbols {
 
