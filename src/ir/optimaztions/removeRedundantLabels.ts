@@ -27,7 +27,7 @@ export function removeRedundantLabels(ir: ProgramIR): ProgramIR {
         }
 
         // 第二步，在 IR 中移除相邻的 label
-        const codesWithoutRedundant = codes.filter((code, index) => {
+        const codesWithoutRedundant = codes.filter((code, index, codes) => {
             if (index === 0) {
                 return true;
             }
@@ -39,10 +39,8 @@ export function removeRedundantLabels(ir: ProgramIR): ProgramIR {
                 return false;
             }
             return true;
-        });
-
         // 第三步，根据 map 执行 label 替换
-        const codesRewrited = codesWithoutRedundant.map(code => {
+        }).map(code => {
             switch (code.type) {
                 case IRCodeType.conditionalJump:
                 case IRCodeType.jump:
@@ -58,9 +56,45 @@ export function removeRedundantLabels(ir: ProgramIR): ProgramIR {
                 default:
                     return code;
             }
+        // 第四步，如果 jump 后面的 target 是紧跟的下一个 label，那么这个 jump 是不需要的
+        }).filter((code, index, codes) => {
+            if (code.type !== IRCodeType.jump) {
+                return true;
+            }
+            if (index + 1 === codes.length) {
+                return true;
+            }
+            const nextCode = codes[index + 1];
+            if (nextCode.type !== IRCodeType.label) {
+                return true;
+            }
+            if (nextCode.label === code.targetLabel) {
+                return false;
+            }
+            return true;
         });
 
-        method.codes = codesRewrited;
+        // 构造一个 Set，把所有有 jump 指的 label 都存下来
+        const jumpTargetLabelSet = new Set<string>();
+
+        codesWithoutRedundant.forEach(code => {
+            switch (code.type) {
+                case IRCodeType.jump:
+                case IRCodeType.conditionalJump:
+                {
+                    const {targetLabel} = code;
+                    jumpTargetLabelSet.add(targetLabel);
+                }
+            }
+        });
+
+        // 第五步，把所有没有 jump target 指向的 label 都过滤掉
+        method.codes = codesWithoutRedundant.filter(code => {
+            if (code.type !== IRCodeType.label) {
+                return true;
+            }
+            return jumpTargetLabelSet.has(code.label);
+        });
     }
     return ir;
 }
