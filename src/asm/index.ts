@@ -160,6 +160,12 @@ export function genAssembly(ast: ProgramNode) {
                     if (irCode.value.type === ValueType.Identifier) {
                         asm.push(`    movq ${getIdentifierValue(irCode.value)}, %rax`);
                     }
+                    if (irCode.value.type === ValueType.Parameter) {
+                        const pos = irCode.value.index >= 6
+                            ? `${(irCode.value.index - 4) * 8}(%rbp)`
+                            : `${method.parameters.get(irCode.value.name)!.offset}(%rbp)`;
+                        asm.push(`    movq ${pos}, %rax`);
+                    }
                     break;
                 }
                 case IRCodeType.exit:

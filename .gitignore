@@ -111,6 +111,10 @@ src/__tests__/codegen/input/*.o
 src/__tests__/codegen/input/*.s
 src/__tests__/codegen-hidden/input/*.o
 src/__tests__/codegen-hidden/input/*.s
+src/__tests__/dataflow/input/*.o
+src/__tests__/dataflow/input/*.s
+src/__tests__/dataflow-hidden/input/*.o
+src/__tests__/dataflow-hidden/input/*.s
 # 优化测试用例相关构建产物
 src/__tests__/optimizer/data/*.o
 src/__tests__/optimizer/input/*.o

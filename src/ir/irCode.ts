@@ -14,7 +14,7 @@ export function createEnterIRCode(): EnterIRCode {
 
 export interface ReturnIRCode {
     type: IRCodeType.return;
-    value?: ImmValue | TmpValue | IdentifierValue;
+    value?: ImmValue | TmpValue | IdentifierValue | ParameterValue;
 }
 
 export function createReturnIRCode(value?: ImmValue | TmpValue | IdentifierValue): ReturnIRCode {
