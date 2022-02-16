@@ -8,18 +8,25 @@ import {ValueType, ArgumentIRCode, IdentifierValue} from '../ir/irCode';
 
 class TmpSymbols {
 
-    private readonly tmpMap = new Map<string, '%r11' | '%r12' | '%r13'>();
+    private readonly tmpMap = new Map<string, string>();
 
-    // 通过避免跨调用过程中使用 %r10，避免了处理
-    private registerUseRecord = {
+    // %rax，%rbx，%r10 都有特殊用途
+    private registerUseRecord: Record<string, number> = {
+        '%rdi': 0,
+        '%rsi': 0,
+        '%rcx': 0,
+        '%rdx': 0,
+        '%r8': 0,
+        '%r9': 0,
         '%r11': 0,
         '%r12': 0,
         '%r13': 0,
+        '%r14': 0,
+        '%r15': 0,
     };
 
     allocateTmp(name: string) {
         const register = this.getEmptyRegister();
-        // @ts-expect-error
         this.tmpMap.set(name, register);
         return register;
     }
@@ -46,7 +53,6 @@ class TmpSymbols {
                 this.tmpMap.delete(item);
             }
         });
-        // @ts-expect-error
         this.registerUseRecord[register] = 0;
     }
 
@@ -54,7 +60,6 @@ class TmpSymbols {
         const register = Object.entries(this.registerUseRecord).sort((a, b) => {
             return a[1] - b[1];
         })[0][0];
-        // @ts-expect-error
         this.registerUseRecord[register] = performance.now();
         return register;
     }
@@ -188,6 +193,12 @@ export function genAssembly(ast: ProgramNode) {
 
                     asm.push('    pushq %r11');
                     asm.push('    pushq %r10');
+                    asm.push('    pushq %r9');
+                    asm.push('    pushq %r8');
+                    asm.push('    pushq %rdx');
+                    asm.push('    pushq %rcx');
+                    asm.push('    pushq %rsi');
+                    asm.push('    pushq %rdi');
 
                     if (callIRCode.length >= 6 && callIRCode.length % 2 !== 0) {
                         asm.push('    subq $8, %rsp');
@@ -252,6 +263,12 @@ export function genAssembly(ast: ProgramNode) {
                     if (irCode.length === 0) {
                         asm.push('    pushq %r11');
                         asm.push('    pushq %r10');
+                        asm.push('    pushq %r9');
+                        asm.push('    pushq %r8');
+                        asm.push('    pushq %rdx');
+                        asm.push('    pushq %rcx');
+                        asm.push('    pushq %rsi');
+                        asm.push('    pushq %rdi');
                     }
 
                     asm.push(`    call ${irCode.name}`);
@@ -265,6 +282,12 @@ export function genAssembly(ast: ProgramNode) {
                         }
                     }
 
+                    asm.push('    popq %rdi');
+                    asm.push('    popq %rsi');
+                    asm.push('    popq %rcx');
+                    asm.push('    popq %rdx');
+                    asm.push('    popq %r8');
+                    asm.push('    popq %r9');
                     asm.push('    popq %r10');
                     asm.push('    popq %r11');
 
@@ -343,12 +366,16 @@ export function genAssembly(ast: ProgramNode) {
                             ? `${irCode.left.name}(,${indexPos}, ${irCode.left.typeSize})`
                             : `${irCode.left.offset}(%rbp, ${indexPos}, ${irCode.left.typeSize})`;
 
+                        asm.push('    pushq %r15');
+                        asm.push('    pushq %r14');
                         asm.push(`    movl $${irCode.left.methodNameLength}, %r14d`);
                         asm.push(`    movl $${irCode.left.methodName}, %r15d`);
                         asm.push(`    cmpq $0, ${indexPos}`);
                         asm.push('    jl .exit_array_check');
                         asm.push(`    cmpq $${irCode.left.length}, ${indexPos}`);
                         asm.push('    jge .exit_array_check');
+                        asm.push('    popq %r14');
+                        asm.push('    popq %r15');
 
                         switch (irCode.right.type) {
                             case ValueType.Imm:
@@ -1651,12 +1678,16 @@ export function genAssembly(ast: ProgramNode) {
                         }
                     })();
 
+                    asm.push('    pushq %r15');
+                    asm.push('    pushq %r14');
                     asm.push(`    movl $${location.methodNameLength}, %r14d`);
                     asm.push(`    movl $${location.methodName}, %r15d`);
                     asm.push(`    cmpq $0, ${indexPos}`);
                     asm.push('    jl .exit_array_check');
                     asm.push(`    cmpq $${location.length}, ${indexPos}`);
                     asm.push('    jge .exit_array_check');
+                    asm.push('    popq %r14');
+                    asm.push('    popq %r15');
 
                     const pos = offset === 200
                         ? `${location.name}(, ${indexPos}, ${location.typeSize})`
