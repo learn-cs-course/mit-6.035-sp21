@@ -120,3 +120,4 @@ src/__tests__/optimizer/data/*.o
 src/__tests__/optimizer/input/*.o
 src/__tests__/optimizer/input/*.s
 src/__tests__/optimizer/data/*_*.pgm
+src/__tests__/derby/input/derby.dcf.s
