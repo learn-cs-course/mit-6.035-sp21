@@ -6,7 +6,7 @@ import * as path from 'path';
 import * as cp from 'child_process';
 import main from '../main';
 
-const GCC_BIN = path.resolve(__dirname, 'derby/derby_gcc');
+const GCC_BIN = '/opt/compiler/gcc-10/bin/gcc';
 
 const derbyTestInputDir = path.resolve(__dirname, 'derby/input');
 const derbyTestOutputDir = path.resolve(__dirname, 'derby/output');
@@ -38,10 +38,10 @@ describe('derby basic cases', () => {
             cp.execSync(`./${filename}.o`, {cwd: derbyTestDataDir});
 
             // 获取预期的文件输出
-            const expectOutFilePath = path.resolve(derbyTestOutputDir, `${filename.replace('.dcf', '')}.pgm`);
+            const expectOutFilePath = path.resolve(derbyTestOutputDir, 'golden.ppm');
             const expectOut = fs.readFileSync(expectOutFilePath, 'utf-8');
 
-            const outFilePath = path.resolve(derbyTestDataDir, `${filename.replace('.dcf', '')}.pgm`);
+            const outFilePath = path.resolve(derbyTestDataDir, 'output.ppm');
             const out = fs.readFileSync(outFilePath, 'utf-8');
 
             expect(out).toBe(expectOut);

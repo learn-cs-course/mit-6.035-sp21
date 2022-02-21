@@ -44,7 +44,6 @@ describe('dataflow basic cases', () => {
 
 const dataflowHiddenTestInputDir = path.resolve(__dirname, 'dataflow-hidden/input');
 const dataflowHiddenTestOutputDir = path.resolve(__dirname, 'dataflow-hidden/output');
-const dataflowHiddenTestErrorDir = path.resolve(__dirname, 'dataflow-hidden/error');
 const dataflowHiddenTestLibPath = path.resolve(__dirname, 'dataflow-hidden/lib');
 const dataflowHiddenInputCases = fs.readdirSync(dataflowHiddenTestInputDir, 'utf-8').filter(
     name => name.endsWith('.dcf')

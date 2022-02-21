@@ -228,19 +228,19 @@ export const enum Type {
 }
 
 export const enum IRCodeType {
-    enter,
-    return,
-    exit,
-    argument,
-    call,
-    assign,
-    unary,
-    binary,
-    label,
-    conditionalJump,
-    jump,
-    arrayLocation,
-    functionReturnCheck,
+    enter = 'enter',
+    return = 'return',
+    exit = 'exit',
+    argument = 'argument',
+    call = 'call',
+    assign = 'assign',
+    unary = 'unary',
+    binary = 'binary',
+    label = 'label',
+    conditionalJump = 'conditionalJump',
+    jump = 'jump',
+    arrayLocation = 'arrayLocation',
+    functionReturnCheck = 'functionReturnCheck',
 }
 
 interface IdentifierSymbol {

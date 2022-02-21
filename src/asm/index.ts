@@ -349,7 +349,11 @@ export function genAssembly(ast: ProgramNode) {
                                 }
                                 case ValueType.Tmp:
                                 {
-                                    return tmpSymbols.getTmpRegister(irCode.left.index.name);
+                                    const register = '%rbx';
+                                    const tmpRegister = tmpSymbols.getTmpRegister(irCode.left.index.name);
+                                    asm.push(`    movq ${tmpRegister}, ${register}`);
+                                    tmpSymbols.freeRegister(tmpRegister);
+                                    return register;
                                 }
                                 case ValueType.Identifier:
                                 {
@@ -1664,7 +1668,11 @@ export function genAssembly(ast: ProgramNode) {
                             }
                             case ValueType.Tmp:
                             {
-                                return tmpSymbols.getTmpRegister(location.index.name);
+                                const register = '%rbx';
+                                const tmpRegister = tmpSymbols.getTmpRegister(location.index.name);
+                                asm.push(`    movq ${tmpRegister}, ${register}`);
+                                tmpSymbols.freeRegister(tmpRegister);
+                                return register;
                             }
                             case ValueType.Identifier:
                             {
