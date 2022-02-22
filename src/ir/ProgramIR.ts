@@ -21,7 +21,7 @@ export interface ParameterInMethod {
     offset: number;
 }
 
-type IRPlainCode = EnterIRCode
+export type IRPlainCode = EnterIRCode
     | ReturnIRCode
     | ExitIRCode
     | CallIRCode
