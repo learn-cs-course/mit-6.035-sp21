@@ -123,3 +123,6 @@ src/__tests__/optimizer/data/*_*.pgm
 src/__tests__/derby/data/derby.dcf.o
 src/__tests__/derby/input/derby.dcf.s
 src/__tests__/derby/data/output.ppm
+
+# 本地调试用
+__debug__/

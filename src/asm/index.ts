@@ -2,6 +2,7 @@
  * @file 汇编生成
  */
 
+import {performance} from 'perf_hooks';
 import {ProgramNode, IRCodeType, SyntaxKind} from '../types/grammar';
 import {genIR} from '../ir';
 import {ValueType, ArgumentIRCode, IdentifierValue} from '../ir/irCode';

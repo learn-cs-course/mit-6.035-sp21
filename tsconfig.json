@@ -16,6 +16,9 @@
         "keyofStringsOnly": true,
         "skipLibCheck": true,
         "sourceMap": true,
+        "lib": [
+            "ES2021"
+        ],
         "paths": {
             "@/*": ["./src/*"]
         }

@@ -112,3 +112,30 @@ export function buildControlFlowGraph(codes: IRPlainCode[]): ControlFlowGraph {
 
     return graph;
 }
+
+export function printIRCode(codes: IRPlainCode[]) {
+    const lines: string[] = [];
+    for (const code of codes) {
+        lines.push(JSON.stringify(code));
+    }
+    return lines;
+}
+
+export function printControlFlowGraph(graph: ControlFlowGraph) {
+    const lines: string[] = [
+        'digraph G {',
+    ];
+
+    graph.nodes.forEach((basicBlock, id) => {
+        const content = JSON.stringify(basicBlock.codes).replaceAll('"', '');
+        lines.push(`${id} [shape=box, xlabel="${id}" label="${content}"];`);
+    });
+
+    graph.edges.forEach(edge => {
+        lines.push(`${edge.source} -> ${edge.target}`);
+    });
+
+    lines.push('}');
+
+    return lines.join('\n');
+}
