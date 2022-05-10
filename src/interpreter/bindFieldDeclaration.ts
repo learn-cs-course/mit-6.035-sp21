@@ -16,14 +16,6 @@ export function bindFieldDeclaration(
 
         declaration.parent = fieldDeclaration;
         const isIdentifier = declaration.kind === SyntaxKind.Identifier;
-
-        if (isIdentifier) {
-            bindLeafNode(declaration, context);
-        }
-        else {
-            bindArrayDeclaration(declaration, context);
-        }
-
         const type = (() => {
             if (mainType === Type.Int) {
                 if (isIdentifier) {
@@ -43,6 +35,13 @@ export function bindFieldDeclaration(
             type,
             declaration: fieldDeclaration,
         });
+
+        if (isIdentifier) {
+            bindLeafNode(declaration, context);
+        }
+        else {
+            bindArrayDeclaration(declaration, context);
+        }
     });
     fieldDeclaration.nodeType = Type.Void;
 

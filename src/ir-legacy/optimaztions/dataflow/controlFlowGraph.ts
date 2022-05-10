@@ -40,6 +40,7 @@ export function buildControlFlowGraph(codes: IRPlainCode[]): ControlFlowGraph {
         switch (code.type) {
             case IRCodeType.conditionalJump:
             {
+                currentBasicBlock.codes.push(code);
                 graph.edges.push({
                     source: currentBasicBlock.id,
                     target: code.targetLabel,
@@ -50,12 +51,9 @@ export function buildControlFlowGraph(codes: IRPlainCode[]): ControlFlowGraph {
                 }
                 const nextCode = codes[i + 1];
                 // 如果下一个是 label，就用 label 当 node id
-                if (nextCode.type === IRCodeType.label) {
-                    break;
-                }
                 // 如果下一个不是 label，就生成一个 node id
                 const newBasicBlock: BasicBlock = {
-                    id: `Node${++nodeId}`,
+                    id: nextCode.type === IRCodeType.label ? nextCode.label : `Node${++nodeId}`,
                     codes: [],
                 };
                 // 对于 conditional jump，生成一条指向下一个 basic block 的边
@@ -69,6 +67,7 @@ export function buildControlFlowGraph(codes: IRPlainCode[]): ControlFlowGraph {
             }
             case IRCodeType.jump:
             {
+                currentBasicBlock.codes.push(code);
                 graph.edges.push({
                     source: currentBasicBlock.id,
                     target: code.targetLabel,
@@ -79,12 +78,9 @@ export function buildControlFlowGraph(codes: IRPlainCode[]): ControlFlowGraph {
                 }
                 const nextCode = codes[i + 1];
                 // 如果下一个是 label，就用 label 当 node id
-                if (nextCode.type === IRCodeType.label) {
-                    break;
-                }
                 // 如果下一个不是 label，就生成一个 node id
                 const newBasicBlock: BasicBlock = {
-                    id: `Node${++nodeId}`,
+                    id: nextCode.type === IRCodeType.label ? nextCode.label : `Node${++nodeId}`,
                     codes: [],
                 };
                 // 对于无条件跳转，不生成边
@@ -94,12 +90,19 @@ export function buildControlFlowGraph(codes: IRPlainCode[]): ControlFlowGraph {
             }
             case IRCodeType.label:
             {
-                const newBasicBlock: BasicBlock = {
-                    id: code.label,
-                    codes: [],
-                };
-                currentBasicBlock = newBasicBlock;
-                graph.nodes.set(currentBasicBlock.id, currentBasicBlock);
+                if (currentBasicBlock.id !== code.label) {
+                    const newBasicBlock: BasicBlock = {
+                        id: code.label,
+                        codes: [],
+                    };
+                    graph.edges.push({
+                        source: currentBasicBlock.id,
+                        target: newBasicBlock.id,
+                    });
+                    currentBasicBlock = newBasicBlock;
+                    graph.nodes.set(currentBasicBlock.id, currentBasicBlock);
+                }
+                currentBasicBlock.codes.push(code);
                 break;
             }
             default:
@@ -128,11 +131,14 @@ export function printControlFlowGraph(graph: ControlFlowGraph) {
 
     graph.nodes.forEach((basicBlock, id) => {
         const content = JSON.stringify(basicBlock.codes).replaceAll('"', '');
-        lines.push(`${id} [shape=box, xlabel="${id}" label="${content}"];`);
+        const printedId = id.replaceAll('.', '');
+        lines.push(`${printedId} [shape=box, xlabel="${id}"];`);
     });
 
     graph.edges.forEach(edge => {
-        lines.push(`${edge.source} -> ${edge.target}`);
+        const source = edge.source.replaceAll('.', '');
+        const target = edge.target.replaceAll('.', '');
+        lines.push(`${source} -> ${target}`);
     });
 
     lines.push('}');

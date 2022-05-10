@@ -104,7 +104,7 @@ export class SymbolTable {
      * 在 symbol table 中添加一个变量
      * 由于需要计算 offset，因此需要知道变量占用多少 byte
      *
-     * @param symbol
+     * @param name
      * @param typeSize
      * @param size
      */

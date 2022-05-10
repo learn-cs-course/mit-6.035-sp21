@@ -4,8 +4,8 @@
 
 import {performance} from 'perf_hooks';
 import {ProgramNode, IRCodeType, SyntaxKind} from '../types/grammar';
-import {genIR} from '../ir';
-import {ValueType, ArgumentIRCode, IdentifierValue} from '../ir/irCode';
+import {genIR} from '../ir-legacy';
+import {ValueType, ArgumentIRCode, IdentifierValue} from '../ir-legacy/irCode';
 
 class TmpSymbols {
 

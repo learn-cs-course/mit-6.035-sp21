@@ -4,7 +4,7 @@
     ],
     "compilerOptions": {
         "module": "CommonJS",
-        "target": "es2018",
+        "target": "es2020",
         "outDir": "dist",
         "jsx": "react-jsx",
         "esModuleInterop": true,

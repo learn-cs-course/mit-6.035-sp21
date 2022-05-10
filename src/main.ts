@@ -5,6 +5,7 @@ import {Scanner} from './scanner';
 import {Parser} from './parser';
 import {bindProgram} from './interpreter/bindProgram';
 import {genAssembly} from './asm';
+import {genIR} from './ir';
 
 interface Options {
     target: 'scan' | 'parse' | 'inter' | 'assembly';
@@ -57,5 +58,18 @@ export default function main(filePath: string, options: Options) {
         }
         return genAssembly(ast);
     }
-
+    else if (options.target === 'ir-debug') {
+        const parser = new Parser(code);
+        const ast = parser.parse();
+        if (ast === null) {
+            return '';
+        }
+        try {
+            bindProgram(ast);
+        }
+        catch (e) {
+            return '';
+        }
+        return genIR(ast);
+    }
 }
